@@ -113,6 +113,12 @@ services:
       MAX_IN_FLIGHT: ${MAX_IN_FLIGHT:-0}
       JVM_OPTS: ${GATEWAY_JVM_OPTS:--XX:+UseG1GC -XX:MaxRAMPercentage=65}
     ports: ["8080:8080"]
+    # Readiness, so `up --wait` returns only after Flyway has run and the app accepts traffic.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/actuator/health/readiness"]
+      interval: 5s
+      start_period: 10s
+      retries: 36
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -131,6 +137,12 @@ services:
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP: kafka:9092
     ports: ["8081:8081"]
+    # Readiness, so `up --wait` returns only after Flyway has run and the app accepts traffic.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8081/actuator/health/readiness"]
+      interval: 5s
+      start_period: 10s
+      retries: 36
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

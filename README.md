@@ -36,7 +36,8 @@ before and after numbers for each fix are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ### At larger scale (projected, not measured)
 
-Sized from the measured CPU cost per request (gateway 0.30 to 0.42 ms, Redis 0.031 to 0.050 ms),
+Sized from the measured CPU cost per request at 3,000 req/s and above (gateway 0.30 to 0.42 ms,
+Redis 0.031 to 0.050 ms; lighter load costs more per request, up to 0.50 ms on the gateway),
 the measured drain rate, and about 200 bytes of Postgres per event. They assume cost stays
 linear; from 1 to 2 CPUs throughput rose 1.85x, and from 2 to 4 it rose 1.6x before the laptop
 became the limit.

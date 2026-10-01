@@ -178,8 +178,8 @@ def power_source():
 
 
 def require_ac_power():
-    # On battery macOS throttles the CPU: a run on 2026-10-02 at 17% battery served 1,300 requests/s
-    # where the same image had served 5,000 on AC, and nothing in the results showed why.
+    # On battery macOS throttles the CPU: a run on 2026-10-02 at 17% battery spent 2.4x the CPU per
+    # request that the same image spent on AC, and nothing in the results showed why.
     if power_source() == "battery" and os.environ.get("ALLOW_BATTERY") != "1":
         sys.exit("refusing to benchmark on battery power (results are not comparable); plug in or set ALLOW_BATTERY=1")
 
@@ -484,7 +484,8 @@ def gateway_state():
 def main():
     os.makedirs(RAW, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else "steps"
-    require_ac_power()
+    if what != "smoke":  # smoke checks correctness only, so power state does not matter
+        require_ac_power()
     rates = [int(x) for x in os.environ.get("RATES", "1000,2000,3000,4000,5000,6000,7000,8000").split(",")]
     if what == "steps":
         steps(rates)
