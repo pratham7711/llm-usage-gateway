@@ -1,0 +1,90 @@
+JFR 'profile' settings, 40 s at a steady 1000 rps (k6 constant-arrival-rate, 20% streamed),
+gateway in a 2 CPU / 1 GB container, G1, max-in-flight 1024, JDK HttpClient pool uncapped, OTel agent on (1% sampling).
+Recorded 2026-10-02 before the connection-pool cap. Raw recording not committed (3 MB).
+
+
+                                                                   Java Methods that Executes the Most
+
+Method                                                                                                                                                    Samples Percent
+--------------------------------------------------------------------------------------------------------------------------------------------------------- ------- -------
+java.util.LinkedList$ListItr.previous()                                                                                                                        53  11.30%
+jdk.internal.net.http.ConnectionPool$ExpiryList.remove(HttpConnection)                                                                                         42   8.96%
+java.util.HashMap.putVal(int, Object, Object, boolean, boolean)                                                                                                14   2.99%
+java.util.HashMap.getNode(Object)                                                                                                                              13   2.77%
+java.util.concurrent.ConcurrentHashMap.get(Object)                                                                                                             10   2.13%
+java.lang.String.hashCode()                                                                                                                                    10   2.13%
+java.util.Arrays.copyOf(Object[], int)                                                                                                                          9   1.92%
+java.lang.ThreadLocal$ThreadLocalMap.getEntry(ThreadLocal)                                                                                                      7   1.49%
+org.apache.tomcat.util.net.NioEndpoint$Poller.timeout(int, boolean)                                                                                             6   1.28%
+java.util.HashMap$HashIterator.<init>(HashMap)                                                                                                                  5   1.07%
+org.apache.coyote.Request.action(ActionCode, Object)                                                                                                            4   0.85%
+java.util.concurrent.CompletableFuture.postComplete()                                                                                                           4   0.85%
+io.opentelemetry.javaagent.shaded.io.opentelemetry.context.ArrayBasedContext.get(ContextKey)                                                                    4   0.85%
+java.util.Comparator.lambda$comparing$77a9974f$1(Function, Object, Object)                                                                                      4   0.85%
+java.util.HashMap.resize()                                                                                                                                      4   0.85%
+java.util.ArrayList.grow(int)                                                                                                                                   4   0.85%
+java.lang.ThreadLocal.get(Thread)                                                                                                                               3   0.64%
+io.micrometer.core.instrument.observation.DefaultMeterObservationHandler.onStart(Observation$Context)                                                           3   0.64%
+java.lang.ThreadBuilders.newVirtualThread(Executor, String, int, Runnable)                                                                                      3   0.64%
+jdk.internal.net.http.common.MinimalFuture.newIncompleteFuture()                                                                                                3   0.64%
+java.lang.Long.getChars(long, int, byte[])                                                                                                                      3   0.64%
+org.apache.catalina.connector.RequestFacade.getAttribute(String)                                                                                                3   0.64%
+jdk.internal.net.http.ConnectionPool$ExpiryList.add(HttpConnection, Instant, long)                                                                              3   0.64%
+jdk.internal.misc.Unsafe.checkOffset(Object, long)                                                                                                              3   0.64%
+java.util.concurrent.locks.AbstractQueuedSynchronizer.signalNext(AbstractQueuedSynchronizer$Node)                                                               3   0.64%
+
+
+                                                                            Allocation by Site
+
+Method                                                                                                                                                Allocation Pressure
+----------------------------------------------------------------------------------------------------------------------------------------------------- -------------------
+org.apache.tomcat.util.buf.CharChunk.toStringInternal()                                                                                                            13.35%
+io.opentelemetry.javaagent.shaded.io.opentelemetry.context.ThreadLocalContextStorage.attach(Context)                                                               13.29%
+org.springframework.core.ResolvableType.forType(Type, SerializableTypeWrapper$TypeProvider, ResolvableType$VariableResolver)                                       12.24%
+org.apache.kafka.common.compress.Lz4BlockOutputStream.<init>(OutputStream, int, int, boolean, boolean)                                                             10.80%
+io.opentelemetry.javaagent.shaded.io.opentelemetry.api.common.Attributes.builder()                                                                                 10.30%
+net.jpountz.lz4.LZ4JavaSafeCompressor.compress64k(byte[], int, int, byte[], int, int)                                                                               4.90%
+java.util.stream.ForEachOps.makeRef(Consumer, boolean)                                                                                                              1.75%
+jdk.internal.vm.Continuation.doYield()                                                                                                                              1.67%
+io.micrometer.core.instrument.observation.DefaultMeterObservationHandler.onStart(Observation$Context)                                                               1.49%
+java.nio.HeapByteBuffer.<init>(int, int, MemorySegment)                                                                                                             1.15%
+java.lang.invoke.DirectMethodHandle.allocateInstance(Object)                                                                                                        0.94%
+java.util.Arrays.copyOfRangeByte(byte[], int, int)                                                                                                                  0.86%
+java.io.BufferedReader.<init>(Reader, int)                                                                                                                          0.68%
+sun.nio.ch.Net.accept(FileDescriptor, FileDescriptor, InetSocketAddress[])                                                                                          0.67%
+java.util.ArrayList.grow(int)                                                                                                                                       0.65%
+java.util.HashMap.resize()                                                                                                                                          0.63%
+jdk.internal.misc.Unsafe.allocateUninitializedArray(Class, int)                                                                                                     0.62%
+java.util.Arrays.copyOf(Object[], int)                                                                                                                              0.60%
+java.lang.StringUTF16.compress(char[], int, int)                                                                                                                    0.51%
+java.util.concurrent.ConcurrentHashMap.putVal(Object, Object, boolean)                                                                                              0.47%
+java.lang.Throwable.fillInStackTrace(int)                                                                                                                           0.44%
+java.util.HashMap.newNode(int, Object, Object, HashMap$Node)                                                                                                        0.40%
+jdk.internal.net.http.common.MinimalFuture.newIncompleteFuture()                                                                                                    0.39%
+java.lang.ThreadLocal$ThreadLocalMap.set(ThreadLocal, Object)                                                                                                       0.39%
+java.util.LinkedHashMap.newNode(int, Object, Object, HashMap$Node)                                                                                                  0.38%
+
+
+GC Pauses
+---------
+
+Total Pause Time: 1.05 s
+
+Number of Pauses: 38
+
+Minimum Pause Time: 0.0956 ms
+
+Median Pause Time: 16.7 ms
+
+Average Pause Time: 27.6 ms
+
+P90 Pause Time: 50.1 ms
+
+P95 Pause Time: 298 ms
+
+P99 Pause Time: 291 ms
+
+P99.9% Pause Time: 291 ms
+
+Maximum Pause Time: 291 ms
+

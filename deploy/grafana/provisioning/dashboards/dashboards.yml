@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: llmgw
+    folder: llm-usage-gateway
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

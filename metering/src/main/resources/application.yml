@@ -1,0 +1,49 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: metering
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/usage}
+    username: ${DB_USER:usage}
+    password: ${DB_PASSWORD:usage}
+    hikari:
+      maximum-pool-size: 8
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 500
+      properties:
+        fetch.max.wait.ms: 100
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+    listener:
+      ack-mode: batch
+
+metering:
+  concurrency: ${METERING_CONCURRENCY:3}
+  usage-topic-partitions: ${USAGE_TOPIC_PARTITIONS:6}
+  usage-topic-replicas: ${USAGE_TOPIC_REPLICAS:1}
+  quota-resync-interval: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: metering

@@ -1,0 +1,114 @@
+warm-up 30s @ 1000 rps
+  steps-warmup: rps=998 ok=30002 non2xx=0 dropped=0 p50=41.2ms p95=73.5ms p99=97.8ms max=209ms
+  steps-1000: rps=999 ok=45000 non2xx=0 dropped=0 p50=41.1ms p95=72.9ms p99=95.6ms max=265ms
+  steps-2000: rps=1997 ok=90001 non2xx=0 dropped=0 p50=41.2ms p95=73.6ms p99=102.3ms max=219ms
+  steps-3000: rps=2976 ok=134154 non2xx=0 dropped=848 p50=41.6ms p95=84.5ms p99=185.8ms max=431ms
+  steps-4000: rps=3980 ok=179455 non2xx=0 dropped=547 p50=41.5ms p95=75.6ms p99=125.8ms max=324ms
+  steps-5000: rps=4915 ok=221738 non2xx=0 dropped=3266 p50=43.3ms p95=98.3ms p99=231.7ms max=534ms
+  steps-6000: rps=2719 ok=125684 non2xx=4055 dropped=140264 p50=52.3ms p95=9204.4ms p99=13866.9ms max=20775ms
+{
+  "at": "2026-10-01T19:04:02+00:00",
+  "hardware": {
+    "host": "Apple M5",
+    "docker_cpus": "10",
+    "docker_mem_gb": 7.7,
+    "limits": "gateway 2 CPU / 1 GB, mock-upstream 2 CPU / 768 MB, metering 1 CPU / 768 MB (docker-compose.yml)",
+    "trace_sampling": "0.01",
+    "host_load_avg_1m_at_record": 5.04,
+    "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+  },
+  "p99_slo_ms": 250.0,
+  "steps": [
+    {
+      "target_rps": 1000,
+      "requests": 45000,
+      "rps": 998.9,
+      "ok": 45000,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 41.1,
+      "p95_ms": 72.9,
+      "p99_ms": 95.6,
+      "max_ms": 264.9,
+      "holds": true
+    },
+    {
+      "target_rps": 2000,
+      "requests": 90001,
+      "rps": 1997.0,
+      "ok": 90001,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 41.2,
+      "p95_ms": 73.6,
+      "p99_ms": 102.3,
+      "max_ms": 219.0,
+      "holds": true
+    },
+    {
+      "target_rps": 3000,
+      "requests": 134154,
+      "rps": 2975.8,
+      "ok": 134154,
+      "non2xx": 0,
+      "dropped": 848,
+      "p50_ms": 41.6,
+      "p95_ms": 84.5,
+      "p99_ms": 185.8,
+      "max_ms": 430.7,
+      "holds": false
+    },
+    {
+      "target_rps": 4000,
+      "requests": 179455,
+      "rps": 3979.7,
+      "ok": 179455,
+      "non2xx": 0,
+      "dropped": 547,
+      "p50_ms": 41.5,
+      "p95_ms": 75.6,
+      "p99_ms": 125.8,
+      "max_ms": 323.6,
+      "holds": false
+    },
+    {
+      "target_rps": 5000,
+      "requests": 221738,
+      "rps": 4914.5,
+      "ok": 221738,
+      "non2xx": 0,
+      "dropped": 3266,
+      "p50_ms": 43.3,
+      "p95_ms": 98.3,
+      "p99_ms": 231.7,
+      "max_ms": 533.9,
+      "holds": false
+    },
+    {
+      "target_rps": 6000,
+      "requests": 129739,
+      "rps": 2718.9,
+      "ok": 125684,
+      "non2xx": 4055,
+      "dropped": 140264,
+      "p50_ms": 52.3,
+      "p95_ms": 9204.4,
+      "p99_ms": 13866.9,
+      "max_ms": 20774.6,
+      "holds": false
+    }
+  ],
+  "max_sustained": {
+    "target_rps": 2000,
+    "requests": 90001,
+    "rps": 1997.0,
+    "ok": 90001,
+    "non2xx": 0,
+    "dropped": 0,
+    "p50_ms": 41.2,
+    "p95_ms": 73.6,
+    "p99_ms": 102.3,
+    "max_ms": 219.0,
+    "holds": true
+  }
+}

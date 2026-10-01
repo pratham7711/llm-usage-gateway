@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: gateway } }
+  template:
+    metadata:
+      labels: { app: gateway }
+    spec:
+      # Without this, the Service named redis injects REDIS_PORT=tcp://<ip>:6379, which
+      # overrides the app's REDIS_PORT and fails startup. Same for the other app pods.
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: gateway
+          image: llmgw/gateway:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: llmgw-config }
+            - secretRef: { name: llmgw-db }
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8080 }
+            periodSeconds: 3
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 500m, memory: 512Mi }
+            limits: { memory: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector: { app: gateway }
+  ports: [{ port: 80, targetPort: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend: { service: { name: gateway, port: { number: 80 } } }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: gateway }
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: gateway } }

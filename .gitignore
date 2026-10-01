@@ -1,0 +1,9 @@
+target/
+deploy/otel/*.jar
+*.log
+.idea/
+.vscode/
+.DS_Store
+__pycache__/
+deploy/terraform/**/.terraform/
+deploy/terraform/**/terraform.tfstate*

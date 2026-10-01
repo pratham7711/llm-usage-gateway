@@ -1,0 +1,366 @@
+{
+  "at": "2026-10-01T20:38:20+00:00",
+  "hardware": {
+    "host": "Apple M5",
+    "docker_cpus": "10",
+    "docker_mem_gb": 7.7,
+    "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+    "trace_sampling": "0.01",
+    "host_load_avg_1m_at_record": 7.56,
+    "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+  },
+  "rate": 1000,
+  "duration_s": 150,
+  "fault": "docker kill -s KILL llmgw-metering-1 at t=30s, then docker start llmgw-metering-1 45s later",
+  "service_back_at_s": 75.3,
+  "k6_finished_at_s": 151.1,
+  "k6": {
+    "ok_p50_ms": 41.8,
+    "ok_p99_ms": 174.0,
+    "requests": 150000,
+    "rps": 999.5,
+    "ok": 148742,
+    "non2xx": 1258,
+    "dropped": 0,
+    "p50_ms": 41.8,
+    "p95_ms": 83.2,
+    "p99_ms": 176.0,
+    "max_ms": 1598.8
+  },
+  "peak_consumer_lag": 55736,
+  "lag_sample_interval": "about 1-2 s (kafka-consumer-groups.sh per sample)",
+  "gateway_events_published": 148742.0,
+  "gateway_events_failed": 0.0,
+  "metering_duplicates_absorbed": 0.0,
+  "metering_duplicates_note": "counter of the metering process alive at the end of the run",
+  "reconciliation": {
+    "k6_ok_responses": 148742,
+    "billed_events": 148742,
+    "lost": 0,
+    "double_billed": 0,
+    "rollup_requests_match": true,
+    "month_requests_match": true,
+    "tokens_match": true
+  },
+  "lag_trace": [
+    [
+      0.0,
+      0
+    ],
+    [
+      2.0,
+      0
+    ],
+    [
+      4.1,
+      0
+    ],
+    [
+      6.2,
+      7
+    ],
+    [
+      8.2,
+      17
+    ],
+    [
+      10.1,
+      8
+    ],
+    [
+      12.2,
+      9
+    ],
+    [
+      14.1,
+      26
+    ],
+    [
+      16.1,
+      14
+    ],
+    [
+      18.1,
+      12
+    ],
+    [
+      20.0,
+      10
+    ],
+    [
+      21.9,
+      3
+    ],
+    [
+      23.9,
+      16
+    ],
+    [
+      25.8,
+      15
+    ],
+    [
+      27.7,
+      6
+    ],
+    [
+      29.6,
+      285
+    ],
+    [
+      31.7,
+      2184
+    ],
+    [
+      33.6,
+      4110
+    ],
+    [
+      35.5,
+      5984
+    ],
+    [
+      37.3,
+      7923
+    ],
+    [
+      39.3,
+      9790
+    ],
+    [
+      41.2,
+      11788
+    ],
+    [
+      43.2,
+      13672
+    ],
+    [
+      45.0,
+      15620
+    ],
+    [
+      47.0,
+      17471
+    ],
+    [
+      48.8,
+      19367
+    ],
+    [
+      50.7,
+      21298
+    ],
+    [
+      52.7,
+      23248
+    ],
+    [
+      54.6,
+      25128
+    ],
+    [
+      56.5,
+      27009
+    ],
+    [
+      58.4,
+      28936
+    ],
+    [
+      60.3,
+      30849
+    ],
+    [
+      62.2,
+      32715
+    ],
+    [
+      64.1,
+      34558
+    ],
+    [
+      65.9,
+      36430
+    ],
+    [
+      67.8,
+      38341
+    ],
+    [
+      69.7,
+      40258
+    ],
+    [
+      71.6,
+      42136
+    ],
+    [
+      73.5,
+      43999
+    ],
+    [
+      75.4,
+      45913
+    ],
+    [
+      77.3,
+      47881
+    ],
+    [
+      79.2,
+      49890
+    ],
+    [
+      81.3,
+      51847
+    ],
+    [
+      83.2,
+      53803
+    ],
+    [
+      85.2,
+      55736
+    ],
+    [
+      87.1,
+      39157
+    ],
+    [
+      89.0,
+      2550
+    ],
+    [
+      91.0,
+      26
+    ],
+    [
+      93.0,
+      9
+    ],
+    [
+      95.0,
+      13
+    ],
+    [
+      97.0,
+      8
+    ],
+    [
+      99.0,
+      13
+    ],
+    [
+      101.0,
+      12
+    ],
+    [
+      103.0,
+      13
+    ],
+    [
+      105.0,
+      32
+    ],
+    [
+      107.4,
+      10
+    ],
+    [
+      109.5,
+      10
+    ],
+    [
+      112.0,
+      10
+    ],
+    [
+      114.0,
+      10
+    ],
+    [
+      116.0,
+      15
+    ],
+    [
+      118.2,
+      10
+    ],
+    [
+      120.3,
+      16
+    ],
+    [
+      122.5,
+      73
+    ],
+    [
+      125.1,
+      17
+    ],
+    [
+      127.8,
+      9
+    ],
+    [
+      130.0,
+      29
+    ],
+    [
+      132.1,
+      11
+    ],
+    [
+      134.1,
+      11
+    ],
+    [
+      136.1,
+      2
+    ],
+    [
+      138.4,
+      12
+    ],
+    [
+      140.4,
+      8
+    ],
+    [
+      142.7,
+      26
+    ],
+    [
+      144.9,
+      92
+    ],
+    [
+      147.3,
+      5
+    ],
+    [
+      149.3,
+      0
+    ],
+    [
+      152.0,
+      0
+    ],
+    [
+      154.1,
+      0
+    ],
+    [
+      156.1,
+      0
+    ],
+    [
+      158.0,
+      0
+    ]
+  ],
+  "source": "run-all-3.log: retry present, chaos run without a warm-up; consumer-kill started on a freshly recreated gateway",
+  "lag_settled_after_service_back_s": 15.7,
+  "lag_settled_below": 100
+}

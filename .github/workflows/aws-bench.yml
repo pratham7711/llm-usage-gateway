@@ -1,0 +1,107 @@
+# Stands up the stack on AWS, benchmarks it, uploads the report and tears everything down, in one
+# job so the destroy step always has the state it needs. Manual only: it spends money.
+# Needs repository variables AWS_REGION, AWS_CI_ROLE_ARN and REPORTS_BUCKET from
+# deploy/terraform/bootstrap. No long-lived AWS keys: the job assumes the role through OIDC.
+name: aws-bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      rate:
+        description: Requests per second for the in-cluster k6 step
+        default: "1000"
+      duration:
+        description: k6 step duration
+        default: 120s
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: aws-bench
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 80
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      BUCKET: ${{ vars.REPORTS_BUCKET }}
+      RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: "21", cache: maven }
+
+      - name: Build jars and fetch the OpenTelemetry agent
+        run: mvn -B -q -DskipTests package && make otel-agent
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-duration-seconds: 7200
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push arm64 images
+        run: |
+          for m in gateway metering mock-upstream; do
+            docker build -q --build-arg MODULE=$m -t "${{ steps.ecr.outputs.registry }}/llmgw/$m:$TAG" .
+            docker push -q "${{ steps.ecr.outputs.registry }}/llmgw/$m:$TAG"
+          done
+
+      - name: Upload the deploy bundle
+        run: |
+          tar -czf bundle.tgz deploy/k8s deploy/aws loadtest/common.js loadtest/step.js
+          aws s3 cp bundle.tgz "s3://$BUCKET/runs/$RUN/bundle.tgz" --only-show-errors
+
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_wrapper: false }
+
+      - name: Apply the stack
+        working-directory: deploy/terraform/stack
+        run: |
+          terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve -var "region=$AWS_REGION" -var "reports_bucket=$BUCKET"
+          echo "INSTANCE=$(terraform output -raw instance_id)" >> "$GITHUB_ENV"
+          echo "STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Run the bench on the node
+        run: |
+          for _ in $(seq 1 60); do
+            n=$(aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$INSTANCE" \
+                --query 'length(InstanceInformationList)' --output text)
+            [ "$n" = "1" ] && break; sleep 10
+          done
+          CMD=$(aws ssm send-command --instance-ids "$INSTANCE" --document-name AWS-RunShellScript \
+            --timeout-seconds 3600 \
+            --parameters "commands=[\"aws s3 cp s3://$BUCKET/runs/$RUN/bundle.tgz /tmp/b.tgz && mkdir -p /tmp/b && tar -xzf /tmp/b.tgz -C /tmp/b && bash /tmp/b/deploy/aws/remote-run.sh ${{ steps.ecr.outputs.registry }} $TAG $BUCKET $RUN ${{ inputs.rate }} ${{ inputs.duration }}\"]" \
+            --query Command.CommandId --output text)
+          while :; do
+            s=$(aws ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTANCE" --query Status --output text 2>/dev/null || echo Pending)
+            case "$s" in Success) break ;; Failed|Cancelled|TimedOut) echo "remote run: $s"; exit 1 ;; esac
+            sleep 15
+          done
+
+      - name: Fetch the report
+        if: always()
+        run: |
+          mkdir -p report
+          aws s3 cp "s3://$BUCKET/runs/$RUN/results" report --recursive --only-show-errors || true
+          echo "wall_time_s=$(( $(date +%s) - ${STARTED:-$(date +%s)} ))" >> report/run.txt
+          cat report/summary.json 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: aws-bench-report, path: report, retention-days: 30 }
+
+      - name: Destroy the stack
+        if: always()
+        working-directory: deploy/terraform/stack
+        run: terraform destroy -input=false -auto-approve -var "region=$AWS_REGION" -var "reports_bucket=$BUCKET"

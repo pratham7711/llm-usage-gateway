@@ -1,0 +1,25 @@
+{
+  "rate": 500,
+  "duration": "60s",
+  "gateway_replicas": 4,
+  "nodes": [
+    "k3d-llmgw-agent-0 v1.35.5+k3s1 10cpu 8124516Ki",
+    "k3d-llmgw-server-0 v1.35.5+k3s1 10cpu 8124516Ki"
+  ],
+  "k6": {
+    "requests": 30001,
+    "ok": 30001,
+    "non2xx": 0,
+    "dropped": 0,
+    "p50_ms": 41.3,
+    "p99_ms": 94.3,
+    "ok_p99_ms": 94.3
+  },
+  "reconciliation": {
+    "billed_events": 30001,
+    "lost": 0,
+    "double_billed": 0,
+    "rollup_requests_match": true,
+    "month_requests_match": true
+  }
+}

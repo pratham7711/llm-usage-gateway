@@ -1,0 +1,234 @@
+{
+  "at": "2026-10-01T20:30:45+00:00",
+  "hardware": {
+    "host": "Apple M5",
+    "docker_cpus": "10",
+    "docker_mem_gb": 7.7,
+    "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+    "trace_sampling": "0.01",
+    "host_load_avg_1m_at_record": 16.03,
+    "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+  },
+  "rate": 1000,
+  "duration_s": 150,
+  "fault": "docker restart llmgw-kafka-1 at t=30s",
+  "service_back_at_s": 31.7,
+  "k6_finished_at_s": 153.5,
+  "k6": {
+    "ok_p50_ms": 59.2,
+    "ok_p99_ms": 798.3,
+    "requests": 149870,
+    "rps": 995.4,
+    "ok": 136775,
+    "non2xx": 13095,
+    "dropped": 135,
+    "p50_ms": 60.2,
+    "p95_ms": 412.4,
+    "p99_ms": 831.1,
+    "max_ms": 2638.3
+  },
+  "peak_consumer_lag": 2176,
+  "lag_sample_interval": "about 1-2 s (kafka-consumer-groups.sh per sample)",
+  "gateway_events_published": 136774.0,
+  "gateway_events_failed": 1.0,
+  "metering_duplicates_absorbed": 0.0,
+  "metering_duplicates_note": "counter of the metering process alive at the end of the run",
+  "reconciliation": {
+    "k6_ok_responses": 136775,
+    "billed_events": 136774,
+    "lost": 1,
+    "double_billed": 0,
+    "rollup_requests_match": true,
+    "month_requests_match": true,
+    "tokens_match": true
+  },
+  "lag_trace": [
+    [
+      0.0,
+      55
+    ],
+    [
+      2.7,
+      13
+    ],
+    [
+      4.8,
+      5
+    ],
+    [
+      7.0,
+      7
+    ],
+    [
+      9.3,
+      13
+    ],
+    [
+      11.4,
+      9
+    ],
+    [
+      13.4,
+      14
+    ],
+    [
+      16.2,
+      22
+    ],
+    [
+      18.7,
+      6
+    ],
+    [
+      21.1,
+      11
+    ],
+    [
+      23.2,
+      40
+    ],
+    [
+      25.9,
+      50
+    ],
+    [
+      30.9,
+      null
+    ],
+    [
+      32.2,
+      2176
+    ],
+    [
+      39.2,
+      64
+    ],
+    [
+      43.3,
+      32
+    ],
+    [
+      47.3,
+      218
+    ],
+    [
+      52.6,
+      0
+    ],
+    [
+      59.4,
+      49
+    ],
+    [
+      63.2,
+      52
+    ],
+    [
+      68.4,
+      371
+    ],
+    [
+      75.2,
+      3
+    ],
+    [
+      77.6,
+      19
+    ],
+    [
+      79.8,
+      7
+    ],
+    [
+      82.1,
+      12
+    ],
+    [
+      84.0,
+      6
+    ],
+    [
+      86.1,
+      18
+    ],
+    [
+      88.3,
+      53
+    ],
+    [
+      92.5,
+      41
+    ],
+    [
+      96.9,
+      225
+    ],
+    [
+      101.8,
+      18
+    ],
+    [
+      107.5,
+      9
+    ],
+    [
+      109.5,
+      13
+    ],
+    [
+      111.7,
+      10
+    ],
+    [
+      113.9,
+      20
+    ],
+    [
+      116.3,
+      18
+    ],
+    [
+      118.7,
+      86
+    ],
+    [
+      121.9,
+      99
+    ],
+    [
+      129.0,
+      61
+    ],
+    [
+      133.8,
+      19
+    ],
+    [
+      138.9,
+      82
+    ],
+    [
+      144.1,
+      423
+    ],
+    [
+      152.9,
+      0
+    ],
+    [
+      158.2,
+      0
+    ],
+    [
+      163.8,
+      0
+    ],
+    [
+      165.8,
+      0
+    ]
+  ],
+  "source": "run-all-2.log, the broker-restart record printed by bench.py before the metadata-timeout retry was added (dispatcher queue present, no retry)",
+  "lag_settled_after_service_back_s": 7.5,
+  "lag_settled_below": 100
+}

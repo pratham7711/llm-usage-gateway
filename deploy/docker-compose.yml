@@ -1,0 +1,149 @@
+# Full local stack. From the repo root: make up   (builds jars and images, then starts everything)
+name: llmgw
+
+x-otel: &otel
+  JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
+  OTEL_TRACES_SAMPLER: parentbased_traceidratio
+  OTEL_TRACES_SAMPLER_ARG: ${TRACE_SAMPLE_RATIO:-1.0}
+  # The agent disables itself when it finds JDK tools (the debug image); keep it on so a
+  # profile measures the same process the benchmarks do.
+  OTEL_JAVAAGENT_ENABLED: "true"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: usage
+      POSTGRES_USER: usage
+      POSTGRES_PASSWORD: usage
+    command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB"]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usage -d usage"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    ports: ["29092:29092"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 3s
+      retries: 40
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    command: ["--kafka.server=kafka:9092"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/jaeger:2.21.0
+    ports: ["16686:16686"]
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=2d"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-locally}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3001:3000"]
+
+  mock-upstream:
+    image: llmgw/mock-upstream:dev
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: mock-upstream
+      MOCK_MEDIAN_MS: ${MOCK_MEDIAN_MS:-40}
+      MOCK_SIGMA: ${MOCK_SIGMA:-0.35}
+      MOCK_ERROR_RATE: ${MOCK_ERROR_RATE:-0}
+      MOCK_MAX_MS: ${MOCK_MAX_MS:-2000}
+      MOCK_STREAM_CHUNKS: ${MOCK_STREAM_CHUNKS:-8}
+    deploy:
+      resources:
+        limits: { cpus: "3", memory: 1536m }
+
+  gateway:
+    image: ${GATEWAY_IMAGE:-llmgw/gateway:dev}
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: gateway
+      DB_URL: jdbc:postgresql://postgres:5432/usage
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: kafka:9092
+      UPSTREAM_BASE_URL: http://mock-upstream:8090
+      MAX_IN_FLIGHT: ${MAX_IN_FLIGHT:-0}
+      JVM_OPTS: ${GATEWAY_JVM_OPTS:--XX:+UseG1GC -XX:MaxRAMPercentage=65}
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      mock-upstream: { condition: service_started }
+    deploy:
+      resources:
+        limits: { cpus: "${GATEWAY_CPUS:-2}", memory: "${GATEWAY_MEM:-1g}" }
+
+  metering:
+    image: llmgw/metering:dev
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: metering
+      DB_URL: jdbc:postgresql://postgres:5432/usage
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports: ["8081:8081"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 768m }
+
+  k6:
+    image: grafana/k6:2.3.0
+    profiles: ["loadtest"]
+    volumes:
+      - ../loadtest:/scripts:ro
+      - ../results/raw:/results
+    environment:
+      GATEWAY_URL: http://gateway:8080

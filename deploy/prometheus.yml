@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs: [{ targets: ["gateway:8080"] }]
+  - job_name: metering
+    metrics_path: /actuator/prometheus
+    static_configs: [{ targets: ["metering:8081"] }]
+  - job_name: mock-upstream
+    metrics_path: /actuator/prometheus
+    static_configs: [{ targets: ["mock-upstream:8090"] }]
+  - job_name: kafka
+    static_configs: [{ targets: ["kafka-exporter:9308"] }]

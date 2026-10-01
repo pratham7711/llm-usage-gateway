@@ -1,0 +1,64 @@
+{
+  "at": "2026-10-01T22:01:12+00:00",
+  "hardware": {
+    "host": "Apple M5",
+    "docker_cpus": "10",
+    "docker_mem_gb": 7.7,
+    "limits": "gateway 2 CPU / 1g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+    "trace_sampling": "0.01",
+    "host_load_avg_1m_at_record": 3.04,
+    "power": "AC",
+    "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+  },
+  "upstream_stream_ms": 30000,
+  "upstream_chunks": 30,
+  "ramp_s": 20,
+  "max_in_flight": 30000,
+  "gateway_mem_limit": "1g",
+  "steps": [
+    {
+      "streams": 2000,
+      "ramp_s": 20.0,
+      "completed": 1965,
+      "failed": 35,
+      "failures": {
+        "truncated": 35
+      },
+      "peak_open": 2000,
+      "wall_ms": 50044,
+      "first_event_ms": {
+        "p50": 1002,
+        "p90": 1005,
+        "p99": 1243,
+        "max": 1424
+      },
+      "total_ms": {
+        "p50": 30036,
+        "p90": 30079,
+        "p99": 30335,
+        "max": 30514
+      },
+      "gateway": {
+        "mem_mib_max": 1024,
+        "mem_mib_at_start": 444,
+        "cpu_cores_mean": 0.36
+      },
+      "reconciliation": {
+        "k6_ok_responses": 1965,
+        "billed_events": 2000,
+        "lost": -35,
+        "double_billed": 0,
+        "rollup_requests_match": true,
+        "month_requests_match": true,
+        "tokens_match": true
+      },
+      "gateway_after_failure": {
+        "status": "running",
+        "oom_killed": false,
+        "exit_code": 0,
+        "restarts": 0,
+        "last_errors": []
+      }
+    }
+  ]
+}

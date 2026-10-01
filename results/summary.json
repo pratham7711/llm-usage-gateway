@@ -1,0 +1,2976 @@
+{
+  "steps-serialgc": {
+    "at": "2026-10-01T19:24:44+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 8.94,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "p99_slo_ms": 250.0,
+    "steps": [
+      {
+        "target_rps": 1000,
+        "ok_p50_ms": 41.7,
+        "ok_p99_ms": 173.0,
+        "requests": 45001,
+        "rps": 998.6,
+        "ok": 45001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 41.7,
+        "p95_ms": 79.7,
+        "p99_ms": 173.0,
+        "max_ms": 426.4,
+        "holds": true
+      },
+      {
+        "target_rps": 2000,
+        "ok_p50_ms": 42.7,
+        "ok_p99_ms": 501.4,
+        "requests": 90001,
+        "rps": 1997.0,
+        "ok": 89486,
+        "non2xx": 515,
+        "dropped": 0,
+        "p50_ms": 42.6,
+        "p95_ms": 101.6,
+        "p99_ms": 500.1,
+        "max_ms": 1260.0,
+        "holds": false
+      },
+      {
+        "target_rps": 3000,
+        "ok_p50_ms": 42.8,
+        "ok_p99_ms": 1050.8,
+        "requests": 134112,
+        "rps": 2972.3,
+        "ok": 127622,
+        "non2xx": 6490,
+        "dropped": 888,
+        "p50_ms": 43.3,
+        "p95_ms": 346.3,
+        "p99_ms": 1043.2,
+        "max_ms": 1720.1,
+        "holds": false
+      }
+    ],
+    "max_sustained": {
+      "target_rps": 1000,
+      "ok_p50_ms": 41.7,
+      "ok_p99_ms": 173.0,
+      "requests": 45001,
+      "rps": 998.6,
+      "ok": 45001,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 41.7,
+      "p95_ms": 79.7,
+      "p99_ms": 173.0,
+      "max_ms": 426.4,
+      "holds": true
+    },
+    "jvm": "SerialGC (JVM default in a 2 CPU / 1 GB container), MaxRAMPercentage=75"
+  },
+  "steps-limit256": {
+    "at": "2026-10-01T19:39:16+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 8.08,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "p99_slo_ms": 250.0,
+    "steps": [
+      {
+        "target_rps": 1000,
+        "ok_p50_ms": 41.9,
+        "ok_p99_ms": 159.0,
+        "requests": 45001,
+        "rps": 998.8,
+        "ok": 44974,
+        "non2xx": 27,
+        "dropped": 0,
+        "p50_ms": 41.9,
+        "p95_ms": 84.2,
+        "p99_ms": 159.0,
+        "max_ms": 351.5,
+        "holds": false
+      },
+      {
+        "target_rps": 2000,
+        "ok_p50_ms": 42.5,
+        "ok_p99_ms": 113.0,
+        "requests": 90001,
+        "rps": 1997.0,
+        "ok": 89127,
+        "non2xx": 874,
+        "dropped": 0,
+        "p50_ms": 42.5,
+        "p95_ms": 82.3,
+        "p99_ms": 160.2,
+        "max_ms": 659.7,
+        "holds": false
+      },
+      {
+        "target_rps": 3000,
+        "ok_p50_ms": 42.5,
+        "ok_p99_ms": 221.2,
+        "requests": 135001,
+        "rps": 2993.8,
+        "ok": 129442,
+        "non2xx": 5559,
+        "dropped": 0,
+        "p50_ms": 42.6,
+        "p95_ms": 98.7,
+        "p99_ms": 335.8,
+        "max_ms": 1002.3,
+        "holds": false
+      }
+    ],
+    "max_sustained": null,
+    "jvm": "G1, MaxRAMPercentage=65; upstream pool capped at 256; max-in-flight 256"
+  },
+  "steps-g1-uncapped": {
+    "source": "k6 summary lines from the run log; the JSON record was overwritten by the next run",
+    "jvm": "G1, MaxRAMPercentage=65; upstream pool uncapped; max-in-flight 1024",
+    "gc_after_run": "max G1 young pause 0.374 s, one full compaction pause 1.034 s; container at 1014 MiB of 1 GiB",
+    "steps": [
+      {
+        "target_rps": 1000,
+        "rps": 998.0,
+        "ok": 45001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 42.5,
+        "p95_ms": 92.9,
+        "p99_ms": 173.5,
+        "max_ms": 455.0,
+        "holds": true
+      },
+      {
+        "target_rps": 2000,
+        "rps": 1941.0,
+        "ok": 81528,
+        "non2xx": 5935,
+        "dropped": 2538,
+        "p50_ms": 52.0,
+        "p95_ms": 863.5,
+        "p99_ms": 2873.1,
+        "max_ms": 4339.0,
+        "holds": false
+      }
+    ]
+  },
+  "steps-limit512": {
+    "at": "2026-10-01T19:42:20+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 6.59,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "p99_slo_ms": 250.0,
+    "steps": [
+      {
+        "target_rps": 1000,
+        "ok_p50_ms": 42.2,
+        "ok_p99_ms": 124.5,
+        "requests": 45001,
+        "rps": 998.4,
+        "ok": 45001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 42.2,
+        "p95_ms": 82.5,
+        "p99_ms": 124.5,
+        "max_ms": 314.4,
+        "holds": true
+      },
+      {
+        "target_rps": 2000,
+        "ok_p50_ms": 43.2,
+        "ok_p99_ms": 783.3,
+        "requests": 90001,
+        "rps": 1997.0,
+        "ok": 84547,
+        "non2xx": 5454,
+        "dropped": 0,
+        "p50_ms": 44.0,
+        "p95_ms": 342.3,
+        "p99_ms": 772.6,
+        "max_ms": 1517.8,
+        "holds": false
+      }
+    ],
+    "max_sustained": {
+      "target_rps": 1000,
+      "ok_p50_ms": 42.2,
+      "ok_p99_ms": 124.5,
+      "requests": 45001,
+      "rps": 998.4,
+      "ok": 45001,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 42.2,
+      "p95_ms": 82.5,
+      "p99_ms": 124.5,
+      "max_ms": 314.4,
+      "holds": true
+    },
+    "jvm": "G1, MaxRAMPercentage=65; upstream pool capped at 256; max-in-flight 512"
+  },
+  "steps": {
+    "at": "2026-10-01T21:41:20+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 5.17,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "p99_slo_ms": 250.0,
+    "steps": [
+      {
+        "target_rps": 1000,
+        "ok_p50_ms": 40.6,
+        "ok_p99_ms": 90.3,
+        "requests": 45000,
+        "rps": 997.5,
+        "ok": 45000,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.6,
+        "p95_ms": 71.6,
+        "p99_ms": 90.3,
+        "max_ms": 172.6,
+        "holds": true
+      },
+      {
+        "target_rps": 1500,
+        "ok_p50_ms": 40.6,
+        "ok_p99_ms": 89.5,
+        "requests": 67501,
+        "rps": 1497.6,
+        "ok": 67501,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.6,
+        "p95_ms": 71.5,
+        "p99_ms": 89.5,
+        "max_ms": 160.8,
+        "holds": true
+      },
+      {
+        "target_rps": 2000,
+        "ok_p50_ms": 40.8,
+        "ok_p99_ms": 89.6,
+        "requests": 90001,
+        "rps": 1996.9,
+        "ok": 90001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.8,
+        "p95_ms": 71.6,
+        "p99_ms": 89.6,
+        "max_ms": 227.6,
+        "holds": true
+      },
+      {
+        "target_rps": 2500,
+        "ok_p50_ms": 40.8,
+        "ok_p99_ms": 90.3,
+        "requests": 112501,
+        "rps": 2494.8,
+        "ok": 112501,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.8,
+        "p95_ms": 71.7,
+        "p99_ms": 90.3,
+        "max_ms": 188.6,
+        "holds": true
+      },
+      {
+        "target_rps": 3000,
+        "ok_p50_ms": 40.9,
+        "ok_p99_ms": 90.6,
+        "requests": 135000,
+        "rps": 2994.6,
+        "ok": 135000,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.9,
+        "p95_ms": 71.8,
+        "p99_ms": 90.6,
+        "max_ms": 217.4,
+        "holds": true
+      }
+    ],
+    "max_sustained": {
+      "target_rps": 3000,
+      "ok_p50_ms": 40.9,
+      "ok_p99_ms": 90.6,
+      "requests": 135000,
+      "rps": 2994.6,
+      "ok": 135000,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 40.9,
+      "p95_ms": 71.8,
+      "p99_ms": 90.6,
+      "max_ms": 217.4,
+      "holds": true
+    }
+  },
+  "overload": {
+    "at": "2026-10-01T20:21:08+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 8.94,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "max_in_flight": 256,
+    "duration_s": 45,
+    "steps": [
+      {
+        "ok_p50_ms": 43.0,
+        "ok_p99_ms": 113.3,
+        "requests": 180001,
+        "rps": 3990.6,
+        "ok": 176218,
+        "non2xx": 3783,
+        "dropped": 0,
+        "p50_ms": 42.7,
+        "p95_ms": 82.6,
+        "p99_ms": 112.8,
+        "max_ms": 222.6,
+        "target_rps": 4000,
+        "ok_rps": 3916.0,
+        "shed_503": 3783
+      },
+      {
+        "ok_p50_ms": 45.8,
+        "ok_p99_ms": 129.3,
+        "requests": 270002,
+        "rps": 5987.9,
+        "ok": 225499,
+        "non2xx": 44503,
+        "dropped": 0,
+        "p50_ms": 42.0,
+        "p95_ms": 86.6,
+        "p99_ms": 124.4,
+        "max_ms": 289.2,
+        "target_rps": 6000,
+        "ok_rps": 5011.1,
+        "shed_503": 44503
+      }
+    ],
+    "recovery": {
+      "ok_p50_ms": 40.9,
+      "ok_p99_ms": 90.7,
+      "requests": 30001,
+      "rps": 997.6,
+      "ok": 30001,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 40.9,
+      "p95_ms": 72.4,
+      "p99_ms": 90.7,
+      "max_ms": 197.9,
+      "target_rps": 1000
+    }
+  },
+  "baseline": {
+    "at": "2026-10-01T19:58:01+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 4.25,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "p99_slo_ms": 250.0,
+    "steps": [
+      {
+        "target_rps": 1000,
+        "ok_p50_ms": 40.3,
+        "ok_p99_ms": 91.3,
+        "requests": 45001,
+        "rps": 997.5,
+        "ok": 45001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.3,
+        "p95_ms": 71.2,
+        "p99_ms": 91.3,
+        "max_ms": 164.4,
+        "holds": true
+      },
+      {
+        "target_rps": 1500,
+        "ok_p50_ms": 40.8,
+        "ok_p99_ms": 98.2,
+        "requests": 67501,
+        "rps": 1497.2,
+        "ok": 67501,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.8,
+        "p95_ms": 73.2,
+        "p99_ms": 98.2,
+        "max_ms": 257.0,
+        "holds": true
+      },
+      {
+        "target_rps": 2000,
+        "ok_p50_ms": 40.3,
+        "ok_p99_ms": 92.2,
+        "requests": 90001,
+        "rps": 1996.6,
+        "ok": 90001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.3,
+        "p95_ms": 72.2,
+        "p99_ms": 92.2,
+        "max_ms": 203.2,
+        "holds": true
+      },
+      {
+        "target_rps": 2500,
+        "ok_p50_ms": 40.8,
+        "ok_p99_ms": 91.2,
+        "requests": 112501,
+        "rps": 2494.3,
+        "ok": 112501,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.8,
+        "p95_ms": 72.3,
+        "p99_ms": 91.2,
+        "max_ms": 173.3,
+        "holds": true
+      },
+      {
+        "target_rps": 3000,
+        "ok_p50_ms": 40.2,
+        "ok_p99_ms": 90.2,
+        "requests": 135001,
+        "rps": 2994.3,
+        "ok": 135001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.2,
+        "p95_ms": 71.2,
+        "p99_ms": 90.2,
+        "max_ms": 200.2,
+        "holds": true
+      }
+    ],
+    "max_sustained": {
+      "target_rps": 3000,
+      "ok_p50_ms": 40.2,
+      "ok_p99_ms": 90.2,
+      "requests": 135001,
+      "rps": 2994.3,
+      "ok": 135001,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 40.2,
+      "p95_ms": 71.2,
+      "p99_ms": 90.2,
+      "max_ms": 200.2,
+      "holds": true
+    }
+  },
+  "burst": {
+    "at": "2026-10-01T20:24:37+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 5.05,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "base_rps": 300,
+    "peak_rps": 3000,
+    "k6": {
+      "ok_p50_ms": 41.4,
+      "ok_p99_ms": 92.1,
+      "requests": 155699,
+      "rps": 926.4,
+      "ok": 155639,
+      "non2xx": 60,
+      "dropped": 0,
+      "p50_ms": 41.4,
+      "p95_ms": 73.0,
+      "p99_ms": 92.1,
+      "max_ms": 180.8
+    }
+  },
+  "consumer-kill": {
+    "at": "2026-10-01T20:45:17+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 13.58,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "rate": 1000,
+    "duration_s": 150,
+    "fault": "docker kill -s KILL llmgw-metering-1 at t=30s, then docker start llmgw-metering-1 45s later",
+    "service_back_at_s": 75.3,
+    "k6_finished_at_s": 151.0,
+    "k6": {
+      "ok_p50_ms": 41.3,
+      "ok_p99_ms": 96.5,
+      "requests": 150000,
+      "rps": 999.6,
+      "ok": 150000,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 41.3,
+      "p95_ms": 73.3,
+      "p99_ms": 96.5,
+      "max_ms": 218.9
+    },
+    "peak_consumer_lag": 56143,
+    "lag_sample_interval": "about 1-2 s (kafka-consumer-groups.sh per sample)",
+    "gateway_events_published": 150000.0,
+    "gateway_events_failed": 0.0,
+    "metering_duplicates_absorbed": 0.0,
+    "metering_duplicates_note": "counter of the metering process alive at the end of the run",
+    "reconciliation": {
+      "k6_ok_responses": 150000,
+      "billed_events": 150000,
+      "lost": 0,
+      "double_billed": 0,
+      "rollup_requests_match": true,
+      "month_requests_match": true,
+      "tokens_match": true
+    },
+    "lag_trace": [
+      [
+        0.0,
+        22
+      ],
+      [
+        2.0,
+        10
+      ],
+      [
+        4.0,
+        8
+      ],
+      [
+        5.9,
+        9
+      ],
+      [
+        7.8,
+        7
+      ],
+      [
+        9.9,
+        5
+      ],
+      [
+        11.9,
+        16
+      ],
+      [
+        13.9,
+        11
+      ],
+      [
+        15.8,
+        13
+      ],
+      [
+        17.8,
+        10
+      ],
+      [
+        19.7,
+        13
+      ],
+      [
+        21.7,
+        11
+      ],
+      [
+        23.9,
+        10
+      ],
+      [
+        25.8,
+        8
+      ],
+      [
+        27.9,
+        13
+      ],
+      [
+        29.8,
+        441
+      ],
+      [
+        31.8,
+        2334
+      ],
+      [
+        33.7,
+        4260
+      ],
+      [
+        35.6,
+        6153
+      ],
+      [
+        37.5,
+        8061
+      ],
+      [
+        39.4,
+        9983
+      ],
+      [
+        41.4,
+        11858
+      ],
+      [
+        43.2,
+        13770
+      ],
+      [
+        45.1,
+        15649
+      ],
+      [
+        47.0,
+        17571
+      ],
+      [
+        48.9,
+        19452
+      ],
+      [
+        50.8,
+        21309
+      ],
+      [
+        52.7,
+        23162
+      ],
+      [
+        54.5,
+        25253
+      ],
+      [
+        56.6,
+        27191
+      ],
+      [
+        58.6,
+        29109
+      ],
+      [
+        60.5,
+        31004
+      ],
+      [
+        62.4,
+        32924
+      ],
+      [
+        64.3,
+        34762
+      ],
+      [
+        66.1,
+        36634
+      ],
+      [
+        68.0,
+        38535
+      ],
+      [
+        69.9,
+        40411
+      ],
+      [
+        71.8,
+        42302
+      ],
+      [
+        73.7,
+        44178
+      ],
+      [
+        75.5,
+        46255
+      ],
+      [
+        77.6,
+        48225
+      ],
+      [
+        79.6,
+        50202
+      ],
+      [
+        81.6,
+        52161
+      ],
+      [
+        83.5,
+        54136
+      ],
+      [
+        85.5,
+        56143
+      ],
+      [
+        87.5,
+        35281
+      ],
+      [
+        89.5,
+        789
+      ],
+      [
+        91.5,
+        42
+      ],
+      [
+        93.4,
+        12
+      ],
+      [
+        95.3,
+        17
+      ],
+      [
+        97.3,
+        32
+      ],
+      [
+        99.2,
+        13
+      ],
+      [
+        101.2,
+        6
+      ],
+      [
+        103.1,
+        18
+      ],
+      [
+        105.1,
+        13
+      ],
+      [
+        107.0,
+        9
+      ],
+      [
+        109.1,
+        4
+      ],
+      [
+        111.0,
+        6
+      ],
+      [
+        113.0,
+        12
+      ],
+      [
+        114.9,
+        57
+      ],
+      [
+        117.8,
+        18
+      ],
+      [
+        119.9,
+        10
+      ],
+      [
+        122.1,
+        19
+      ],
+      [
+        124.1,
+        9
+      ],
+      [
+        126.2,
+        9
+      ],
+      [
+        128.1,
+        10
+      ],
+      [
+        130.2,
+        7
+      ],
+      [
+        132.1,
+        16
+      ],
+      [
+        134.1,
+        5
+      ],
+      [
+        136.0,
+        10
+      ],
+      [
+        138.0,
+        11
+      ],
+      [
+        139.9,
+        18
+      ],
+      [
+        141.9,
+        41
+      ],
+      [
+        143.9,
+        4
+      ],
+      [
+        146.0,
+        6
+      ],
+      [
+        148.0,
+        19
+      ],
+      [
+        150.0,
+        0
+      ],
+      [
+        152.0,
+        0
+      ],
+      [
+        153.9,
+        0
+      ],
+      [
+        155.9,
+        0
+      ],
+      [
+        157.8,
+        0
+      ]
+    ],
+    "lag_settled_after_service_back_s": 16.2,
+    "lag_settled_below": 100
+  },
+  "broker-restart-sync-publish": {
+    "at": "2026-10-01T20:07:10+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 5.83,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "rate": 1000,
+    "duration_s": 150,
+    "fault": "docker restart llmgw-kafka-1 at t=30s",
+    "service_back_at_s": 31.3,
+    "k6_finished_at_s": 151.1,
+    "k6": {
+      "ok_p50_ms": 41.4,
+      "ok_p99_ms": 97.9,
+      "requests": 148659,
+      "rps": 990.7,
+      "ok": 145702,
+      "non2xx": 2957,
+      "dropped": 1342,
+      "p50_ms": 41.5,
+      "p95_ms": 79.2,
+      "p99_ms": 2732.6,
+      "max_ms": 4680.3
+    },
+    "peak_consumer_lag": 32,
+    "lag_sample_interval": "about 1-2 s (kafka-consumer-groups.sh per sample)",
+    "gateway_events_published": 145702.0,
+    "gateway_events_failed": 0.0,
+    "metering_duplicates_absorbed": 0.0,
+    "metering_duplicates_note": "counter of the metering process alive at the end of the run",
+    "reconciliation": {
+      "k6_ok_responses": 145702,
+      "billed_events": 145702,
+      "lost": 0,
+      "double_billed": 0,
+      "rollup_requests_match": true,
+      "month_requests_match": true,
+      "tokens_match": true
+    },
+    "lag_trace": [
+      [
+        0.0,
+        12
+      ],
+      [
+        2.1,
+        10
+      ],
+      [
+        4.1,
+        3
+      ],
+      [
+        6.0,
+        4
+      ],
+      [
+        7.9,
+        13
+      ],
+      [
+        9.9,
+        8
+      ],
+      [
+        11.8,
+        6
+      ],
+      [
+        13.7,
+        7
+      ],
+      [
+        15.6,
+        8
+      ],
+      [
+        17.5,
+        8
+      ],
+      [
+        19.5,
+        5
+      ],
+      [
+        21.4,
+        32
+      ],
+      [
+        23.6,
+        14
+      ],
+      [
+        25.7,
+        20
+      ],
+      [
+        27.7,
+        13
+      ],
+      [
+        29.6,
+        null
+      ],
+      [
+        32.1,
+        0
+      ],
+      [
+        36.2,
+        10
+      ],
+      [
+        38.3,
+        27
+      ],
+      [
+        40.7,
+        14
+      ],
+      [
+        42.7,
+        20
+      ],
+      [
+        45.2,
+        10
+      ],
+      [
+        47.5,
+        9
+      ],
+      [
+        49.7,
+        11
+      ],
+      [
+        51.7,
+        15
+      ],
+      [
+        53.9,
+        14
+      ],
+      [
+        55.9,
+        3
+      ],
+      [
+        57.9,
+        14
+      ],
+      [
+        60.1,
+        11
+      ],
+      [
+        62.3,
+        11
+      ],
+      [
+        64.3,
+        13
+      ],
+      [
+        66.3,
+        13
+      ],
+      [
+        68.4,
+        10
+      ],
+      [
+        70.3,
+        12
+      ],
+      [
+        72.2,
+        11
+      ],
+      [
+        74.1,
+        11
+      ],
+      [
+        76.0,
+        5
+      ],
+      [
+        77.9,
+        6
+      ],
+      [
+        79.8,
+        9
+      ],
+      [
+        81.8,
+        12
+      ],
+      [
+        83.7,
+        8
+      ],
+      [
+        85.8,
+        8
+      ],
+      [
+        87.7,
+        4
+      ],
+      [
+        89.6,
+        5
+      ],
+      [
+        91.5,
+        14
+      ],
+      [
+        93.5,
+        10
+      ],
+      [
+        95.4,
+        10
+      ],
+      [
+        97.4,
+        9
+      ],
+      [
+        99.3,
+        5
+      ],
+      [
+        101.4,
+        10
+      ],
+      [
+        103.3,
+        10
+      ],
+      [
+        105.2,
+        13
+      ],
+      [
+        107.1,
+        7
+      ],
+      [
+        109.0,
+        14
+      ],
+      [
+        110.9,
+        6
+      ],
+      [
+        112.9,
+        14
+      ],
+      [
+        114.8,
+        6
+      ],
+      [
+        116.8,
+        8
+      ],
+      [
+        118.7,
+        2
+      ],
+      [
+        120.6,
+        1
+      ],
+      [
+        122.6,
+        6
+      ],
+      [
+        124.5,
+        14
+      ],
+      [
+        126.4,
+        9
+      ],
+      [
+        128.4,
+        13
+      ],
+      [
+        130.3,
+        3
+      ],
+      [
+        132.2,
+        8
+      ],
+      [
+        134.1,
+        10
+      ],
+      [
+        136.1,
+        8
+      ],
+      [
+        138.0,
+        5
+      ],
+      [
+        140.0,
+        6
+      ],
+      [
+        141.9,
+        14
+      ],
+      [
+        143.9,
+        5
+      ],
+      [
+        145.8,
+        5
+      ],
+      [
+        147.7,
+        14
+      ],
+      [
+        149.6,
+        9
+      ],
+      [
+        151.5,
+        0
+      ],
+      [
+        153.4,
+        0
+      ],
+      [
+        155.3,
+        0
+      ],
+      [
+        157.3,
+        0
+      ]
+    ],
+    "note": "before the dispatch queue: KafkaProducer.send() ran on the request thread",
+    "lag_settled_after_service_back_s": 0.8,
+    "lag_settled_below": 100
+  },
+  "broker-restart": {
+    "at": "2026-10-01T20:48:53+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1 GB, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 4.92,
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "rate": 1000,
+    "duration_s": 150,
+    "fault": "docker restart llmgw-kafka-1 at t=30s",
+    "service_back_at_s": 30.8,
+    "k6_finished_at_s": 151.0,
+    "k6": {
+      "ok_p50_ms": 41.3,
+      "ok_p99_ms": 92.5,
+      "requests": 150001,
+      "rps": 999.5,
+      "ok": 150001,
+      "non2xx": 0,
+      "dropped": 0,
+      "p50_ms": 41.3,
+      "p95_ms": 72.9,
+      "p99_ms": 92.5,
+      "max_ms": 206.6
+    },
+    "peak_consumer_lag": 3325,
+    "lag_sample_interval": "about 1-2 s (kafka-consumer-groups.sh per sample)",
+    "gateway_events_published": 150001.0,
+    "gateway_events_failed": 0.0,
+    "metering_duplicates_absorbed": 0.0,
+    "metering_duplicates_note": "counter of the metering process alive at the end of the run",
+    "reconciliation": {
+      "k6_ok_responses": 150001,
+      "billed_events": 150001,
+      "lost": 0,
+      "double_billed": 0,
+      "rollup_requests_match": true,
+      "month_requests_match": true,
+      "tokens_match": true
+    },
+    "lag_trace": [
+      [
+        0.0,
+        7
+      ],
+      [
+        2.1,
+        10
+      ],
+      [
+        4.2,
+        5
+      ],
+      [
+        6.1,
+        8
+      ],
+      [
+        8.2,
+        14
+      ],
+      [
+        10.7,
+        24
+      ],
+      [
+        13.0,
+        15
+      ],
+      [
+        14.9,
+        7
+      ],
+      [
+        17.0,
+        13
+      ],
+      [
+        19.1,
+        31
+      ],
+      [
+        21.3,
+        12
+      ],
+      [
+        23.2,
+        21
+      ],
+      [
+        25.3,
+        9
+      ],
+      [
+        27.2,
+        14
+      ],
+      [
+        29.1,
+        9
+      ],
+      [
+        31.1,
+        3325
+      ],
+      [
+        34.7,
+        8
+      ],
+      [
+        36.7,
+        9
+      ],
+      [
+        38.8,
+        9
+      ],
+      [
+        40.9,
+        17
+      ],
+      [
+        42.9,
+        5
+      ],
+      [
+        44.9,
+        21
+      ],
+      [
+        46.9,
+        16
+      ],
+      [
+        48.9,
+        12
+      ],
+      [
+        51.0,
+        9
+      ],
+      [
+        53.0,
+        12
+      ],
+      [
+        54.9,
+        15
+      ],
+      [
+        56.9,
+        38
+      ],
+      [
+        58.9,
+        7
+      ],
+      [
+        60.9,
+        12
+      ],
+      [
+        62.8,
+        12
+      ],
+      [
+        64.8,
+        12
+      ],
+      [
+        66.7,
+        13
+      ],
+      [
+        68.7,
+        5
+      ],
+      [
+        70.6,
+        9
+      ],
+      [
+        72.6,
+        7
+      ],
+      [
+        74.6,
+        7
+      ],
+      [
+        76.5,
+        9
+      ],
+      [
+        78.6,
+        7
+      ],
+      [
+        80.5,
+        9
+      ],
+      [
+        82.5,
+        7
+      ],
+      [
+        84.6,
+        7
+      ],
+      [
+        86.5,
+        10
+      ],
+      [
+        88.5,
+        11
+      ],
+      [
+        90.6,
+        4
+      ],
+      [
+        92.5,
+        9
+      ],
+      [
+        94.4,
+        12
+      ],
+      [
+        96.4,
+        7
+      ],
+      [
+        98.3,
+        16
+      ],
+      [
+        100.3,
+        15
+      ],
+      [
+        102.3,
+        15
+      ],
+      [
+        104.2,
+        8
+      ],
+      [
+        106.1,
+        4
+      ],
+      [
+        108.0,
+        7
+      ],
+      [
+        109.9,
+        12
+      ],
+      [
+        112.2,
+        10
+      ],
+      [
+        114.1,
+        8
+      ],
+      [
+        116.1,
+        8
+      ],
+      [
+        118.0,
+        12
+      ],
+      [
+        120.0,
+        4
+      ],
+      [
+        122.0,
+        18
+      ],
+      [
+        124.1,
+        5
+      ],
+      [
+        126.1,
+        12
+      ],
+      [
+        128.1,
+        28
+      ],
+      [
+        130.1,
+        5
+      ],
+      [
+        132.0,
+        12
+      ],
+      [
+        134.1,
+        10
+      ],
+      [
+        136.0,
+        6
+      ],
+      [
+        138.0,
+        14
+      ],
+      [
+        140.0,
+        15
+      ],
+      [
+        142.0,
+        9
+      ],
+      [
+        144.0,
+        17
+      ],
+      [
+        146.1,
+        13
+      ],
+      [
+        148.0,
+        23
+      ],
+      [
+        150.1,
+        0
+      ],
+      [
+        152.0,
+        0
+      ],
+      [
+        154.0,
+        0
+      ],
+      [
+        156.0,
+        0
+      ],
+      [
+        157.9,
+        0
+      ]
+    ],
+    "lag_settled_after_service_back_s": 3.9,
+    "lag_settled_below": 100
+  },
+  "capacity-2cpu": {
+    "at": "2026-10-01T21:44:43+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 6.15,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "gateway_cpus": 2.0,
+    "duration_s": 45,
+    "steps": [
+      {
+        "ok_p50_ms": 40.7,
+        "ok_p99_ms": 90.2,
+        "requests": 90001,
+        "rps": 1993.8,
+        "ok": 90001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 40.7,
+        "p95_ms": 71.6,
+        "p99_ms": 90.2,
+        "max_ms": 184.6,
+        "target_rps": 2000,
+        "ok_rps": 2000.0,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 0.96,
+            "mem_mib_max": 732
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 414
+          },
+          "jaeger": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 173
+          },
+          "k6-run-c1f024789359": {
+            "cpu_cores": 0.38,
+            "mem_mib_max": 640
+          },
+          "kafka": {
+            "cpu_cores": 0.53,
+            "mem_mib_max": 939
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 25
+          },
+          "metering": {
+            "cpu_cores": 0.25,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.36,
+            "mem_mib_max": 391
+          },
+          "postgres": {
+            "cpu_cores": 0.23,
+            "mem_mib_max": 313
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 67
+          },
+          "redis": {
+            "cpu_cores": 0.1,
+            "mem_mib_max": 25
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.48,
+          "grafana": 0.005,
+          "jaeger": 0.005,
+          "k6-run-c1f024789359": 0.19,
+          "kafka": 0.265,
+          "kafka-exporter": 0.0,
+          "metering": 0.125,
+          "mock-upstream": 0.18,
+          "postgres": 0.115,
+          "prometheus": 0.0,
+          "redis": 0.05
+        }
+      },
+      {
+        "ok_p50_ms": 41.5,
+        "ok_p99_ms": 94.2,
+        "requests": 180001,
+        "rps": 3993.0,
+        "ok": 179542,
+        "non2xx": 459,
+        "dropped": 0,
+        "p50_ms": 41.4,
+        "p95_ms": 73.6,
+        "p99_ms": 94.2,
+        "max_ms": 205.8,
+        "target_rps": 4000,
+        "ok_rps": 3989.8,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 1.69,
+            "mem_mib_max": 761
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 444
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 199
+          },
+          "k6-run-82b8eb188f94": {
+            "cpu_cores": 0.73,
+            "mem_mib_max": 666
+          },
+          "kafka": {
+            "cpu_cores": 0.18,
+            "mem_mib_max": 847
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 23
+          },
+          "metering": {
+            "cpu_cores": 0.36,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.71,
+            "mem_mib_max": 396
+          },
+          "postgres": {
+            "cpu_cores": 0.33,
+            "mem_mib_max": 344
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 67
+          },
+          "redis": {
+            "cpu_cores": 0.18,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.424,
+          "grafana": 0.003,
+          "jaeger": 0.0,
+          "k6-run-82b8eb188f94": 0.183,
+          "kafka": 0.045,
+          "kafka-exporter": 0.0,
+          "metering": 0.09,
+          "mock-upstream": 0.178,
+          "postgres": 0.083,
+          "prometheus": 0.0,
+          "redis": 0.045
+        }
+      },
+      {
+        "ok_p50_ms": 42.9,
+        "ok_p99_ms": 99.0,
+        "requests": 270001,
+        "rps": 5985.2,
+        "ok": 243008,
+        "non2xx": 26993,
+        "dropped": 0,
+        "p50_ms": 41.4,
+        "p95_ms": 76.6,
+        "p99_ms": 97.7,
+        "max_ms": 188.5,
+        "target_rps": 6000,
+        "ok_rps": 5400.2,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.0,
+            "mem_mib_max": 786
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 488
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 254
+          },
+          "k6-run-17917cb5b36e": {
+            "cpu_cores": 1.07,
+            "mem_mib_max": 676
+          },
+          "kafka": {
+            "cpu_cores": 0.22,
+            "mem_mib_max": 879
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 23
+          },
+          "metering": {
+            "cpu_cores": 0.38,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.91,
+            "mem_mib_max": 402
+          },
+          "postgres": {
+            "cpu_cores": 0.35,
+            "mem_mib_max": 347
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 53
+          },
+          "redis": {
+            "cpu_cores": 0.22,
+            "mem_mib_max": 12
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.37,
+          "grafana": 0.002,
+          "jaeger": 0.0,
+          "k6-run-17917cb5b36e": 0.198,
+          "kafka": 0.041,
+          "kafka-exporter": 0.0,
+          "metering": 0.07,
+          "mock-upstream": 0.169,
+          "postgres": 0.065,
+          "prometheus": 0.0,
+          "redis": 0.041
+        }
+      }
+    ],
+    "max_in_flight": 256
+  },
+  "capacity-1cpu": {
+    "at": "2026-10-01T21:48:14+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 1 CPU / 1g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 4.73,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "gateway_cpus": 1.0,
+    "duration_s": 45,
+    "steps": [
+      {
+        "ok_p50_ms": 41.5,
+        "ok_p99_ms": 95.4,
+        "requests": 45000,
+        "rps": 998.7,
+        "ok": 45000,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 41.5,
+        "p95_ms": 74.3,
+        "p99_ms": 95.4,
+        "max_ms": 180.6,
+        "target_rps": 1000,
+        "ok_rps": 1000.0,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 0.47,
+            "mem_mib_max": 740
+          },
+          "grafana": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 493
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 254
+          },
+          "k6-run-d830238bc9be": {
+            "cpu_cores": 0.2,
+            "mem_mib_max": 563
+          },
+          "kafka": {
+            "cpu_cores": 0.36,
+            "mem_mib_max": 942
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 24
+          },
+          "metering": {
+            "cpu_cores": 0.14,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.17,
+            "mem_mib_max": 404
+          },
+          "postgres": {
+            "cpu_cores": 0.14,
+            "mem_mib_max": 350
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 53
+          },
+          "redis": {
+            "cpu_cores": 0.05,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.47,
+          "grafana": 0.0,
+          "jaeger": 0.0,
+          "k6-run-d830238bc9be": 0.2,
+          "kafka": 0.36,
+          "kafka-exporter": 0.0,
+          "metering": 0.14,
+          "mock-upstream": 0.17,
+          "postgres": 0.14,
+          "prometheus": 0.0,
+          "redis": 0.05
+        }
+      },
+      {
+        "ok_p50_ms": 41.7,
+        "ok_p99_ms": 108.5,
+        "requests": 90001,
+        "rps": 1996.7,
+        "ok": 90001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 41.7,
+        "p95_ms": 80.5,
+        "p99_ms": 108.5,
+        "max_ms": 198.5,
+        "target_rps": 2000,
+        "ok_rps": 2000.0,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 0.83,
+            "mem_mib_max": 778
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 528
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 254
+          },
+          "k6-run-5657456c8651": {
+            "cpu_cores": 0.36,
+            "mem_mib_max": 646
+          },
+          "kafka": {
+            "cpu_cores": 0.25,
+            "mem_mib_max": 850
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 25
+          },
+          "metering": {
+            "cpu_cores": 0.22,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.33,
+            "mem_mib_max": 405
+          },
+          "postgres": {
+            "cpu_cores": 0.21,
+            "mem_mib_max": 354
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 53
+          },
+          "redis": {
+            "cpu_cores": 0.09,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.415,
+          "grafana": 0.005,
+          "jaeger": 0.0,
+          "k6-run-5657456c8651": 0.18,
+          "kafka": 0.125,
+          "kafka-exporter": 0.0,
+          "metering": 0.11,
+          "mock-upstream": 0.165,
+          "postgres": 0.105,
+          "prometheus": 0.0,
+          "redis": 0.045
+        }
+      },
+      {
+        "ok_p50_ms": 51.7,
+        "ok_p99_ms": 149.2,
+        "requests": 135001,
+        "rps": 2993.8,
+        "ok": 131220,
+        "non2xx": 3781,
+        "dropped": 0,
+        "p50_ms": 51.1,
+        "p95_ms": 112.1,
+        "p99_ms": 148.7,
+        "max_ms": 268.1,
+        "target_rps": 3000,
+        "ok_rps": 2916.0,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 0.98,
+            "mem_mib_max": 753
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 563
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 280
+          },
+          "k6-run-1cec0984037d": {
+            "cpu_cores": 0.55,
+            "mem_mib_max": 650
+          },
+          "kafka": {
+            "cpu_cores": 0.25,
+            "mem_mib_max": 737
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 25
+          },
+          "metering": {
+            "cpu_cores": 0.22,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.48,
+            "mem_mib_max": 421
+          },
+          "postgres": {
+            "cpu_cores": 0.23,
+            "mem_mib_max": 351
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 53
+          },
+          "redis": {
+            "cpu_cores": 0.12,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.336,
+          "grafana": 0.003,
+          "jaeger": 0.0,
+          "k6-run-1cec0984037d": 0.189,
+          "kafka": 0.086,
+          "kafka-exporter": 0.0,
+          "metering": 0.075,
+          "mock-upstream": 0.165,
+          "postgres": 0.079,
+          "prometheus": 0.0,
+          "redis": 0.041
+        }
+      }
+    ],
+    "max_in_flight": 256
+  },
+  "drain": {
+    "at": "2026-10-01T21:53:48+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 5.25,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "backlog_events": 174532,
+    "k6": {
+      "ok_p50_ms": 41.6,
+      "ok_p99_ms": 232.0,
+      "requests": 180001,
+      "rps": 1998.0,
+      "ok": 174532,
+      "non2xx": 5469,
+      "dropped": 0,
+      "p50_ms": 41.8,
+      "p95_ms": 117.7,
+      "p99_ms": 349.3,
+      "max_ms": 1774.2
+    },
+    "metering_cpu_limit": 1,
+    "first_row_after_start_s": 8.73,
+    "drain_events_per_s": 28935,
+    "drain_rate_window": "from the first billed row to 95% of the backlog, by count(*) on usage_event",
+    "usage_while_draining": {
+      "kafka": {
+        "cpu_cores": 0.37,
+        "mem_mib_max": 790
+      },
+      "metering": {
+        "cpu_cores": 0.71,
+        "mem_mib_max": 531
+      },
+      "postgres": {
+        "cpu_cores": 0.33,
+        "mem_mib_max": 345
+      },
+      "redis": {
+        "cpu_cores": 0.02,
+        "mem_mib_max": 11
+      }
+    },
+    "reconciliation": {
+      "k6_ok_responses": 174532,
+      "billed_events": 174532,
+      "lost": 0,
+      "double_billed": 0,
+      "rollup_requests_match": true,
+      "month_requests_match": true,
+      "tokens_match": true
+    },
+    "trace": [
+      [
+        0.04,
+        0
+      ],
+      [
+        1.77,
+        0
+      ],
+      [
+        3.53,
+        0
+      ],
+      [
+        5.25,
+        0
+      ],
+      [
+        6.97,
+        0
+      ],
+      [
+        8.73,
+        1500
+      ],
+      [
+        10.47,
+        23000
+      ],
+      [
+        12.25,
+        59490
+      ],
+      [
+        14.0,
+        137607
+      ]
+    ]
+  },
+  "streams": {
+    "at": "2026-10-01T22:09:05+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 1g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 3.49,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "upstream_stream_ms": 30000,
+    "upstream_chunks": 30,
+    "ramp_s": 20,
+    "max_in_flight": null,
+    "gateway_mem_limit": "1g",
+    "steps": [
+      {
+        "streams": 2000,
+        "ramp_s": 20.0,
+        "completed": 2000,
+        "failed": 0,
+        "failures": {},
+        "peak_open": 2000,
+        "wall_ms": 50009,
+        "first_event_ms": {
+          "p50": 1002,
+          "p90": 1006,
+          "p99": 1362,
+          "max": 1541
+        },
+        "total_ms": {
+          "p50": 30022,
+          "p90": 30042,
+          "p99": 30498,
+          "max": 30679
+        },
+        "gateway": {
+          "mem_mib_max": 980,
+          "mem_mib_at_start": 483,
+          "cpu_cores_mean": 0.4
+        },
+        "reconciliation": {
+          "k6_ok_responses": 2000,
+          "billed_events": 2000,
+          "lost": 0,
+          "double_billed": 0,
+          "rollup_requests_match": true,
+          "month_requests_match": true,
+          "tokens_match": true
+        },
+        "billed_by_status": {
+          "200": 2000
+        },
+        "mock_upstream_mem_mib_max": 650
+      },
+      {
+        "streams": 3000,
+        "ramp_s": 20.0,
+        "completed": 2998,
+        "failed": 2,
+        "failures": {
+          "http_503": 2
+        },
+        "peak_open": 2998,
+        "wall_ms": 50020,
+        "first_event_ms": {
+          "p50": 1002,
+          "p90": 1340,
+          "p99": 1826,
+          "max": 1959
+        },
+        "total_ms": {
+          "p50": 30015,
+          "p90": 30101,
+          "p99": 30765,
+          "max": 30960
+        },
+        "gateway": {
+          "mem_mib_max": 1022,
+          "mem_mib_at_start": 972,
+          "cpu_cores_mean": 0.34
+        },
+        "reconciliation": {
+          "k6_ok_responses": 2998,
+          "billed_events": 2998,
+          "lost": 0,
+          "double_billed": 0,
+          "rollup_requests_match": true,
+          "month_requests_match": true,
+          "tokens_match": true
+        },
+        "billed_by_status": {
+          "200": 2998
+        },
+        "mock_upstream_mem_mib_max": 907
+      },
+      {
+        "streams": 4000,
+        "ramp_s": 20.0,
+        "completed": 0,
+        "failed": 4000,
+        "failures": {
+          "IOException": 4000
+        },
+        "peak_open": 4000,
+        "wall_ms": 20954,
+        "first_event_ms": {
+          "p50": 1001,
+          "p90": 1104,
+          "p99": 1650,
+          "max": 1853
+        },
+        "total_ms": null,
+        "gateway": {
+          "mem_mib_max": 1026,
+          "mem_mib_at_start": 801,
+          "cpu_cores_mean": 0.54
+        },
+        "reconciliation": {
+          "k6_ok_responses": 0,
+          "billed_events": 0,
+          "lost": 0,
+          "double_billed": 0,
+          "rollup_requests_match": true,
+          "month_requests_match": true,
+          "tokens_match": true
+        },
+        "billed_by_status": {},
+        "mock_upstream_mem_mib_max": 1032,
+        "gateway_after_failure": {
+          "status": "exited",
+          "oom_killed": false,
+          "exit_code": 3,
+          "restarts": 0,
+          "last_errors": [
+            "Terminating due to java.lang.OutOfMemoryError: Java heap space"
+          ]
+        }
+      }
+    ]
+  },
+  "capacity-4cpu-inflight512": {
+    "at": "2026-10-01T21:59:48+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 4 CPU / 2g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 6.85,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "gateway_cpus": 4.0,
+    "max_in_flight": 512,
+    "duration_s": 45,
+    "steps": [
+      {
+        "ok_p50_ms": 43.0,
+        "ok_p99_ms": 121.1,
+        "requests": 270000,
+        "rps": 5988.1,
+        "ok": 267027,
+        "non2xx": 2973,
+        "dropped": 0,
+        "p50_ms": 42.9,
+        "p95_ms": 82.0,
+        "p99_ms": 120.8,
+        "max_ms": 252.8,
+        "target_rps": 6000,
+        "ok_rps": 5933.9,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.39,
+            "mem_mib_max": 1019
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 396
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 430
+          },
+          "k6-run-2dc9fb72dea5": {
+            "cpu_cores": 1.01,
+            "mem_mib_max": 673
+          },
+          "kafka": {
+            "cpu_cores": 0.31,
+            "mem_mib_max": 738
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 24
+          },
+          "metering": {
+            "cpu_cores": 0.47,
+            "mem_mib_max": 544
+          },
+          "mock-upstream": {
+            "cpu_cores": 1.01,
+            "mem_mib_max": 629
+          },
+          "postgres": {
+            "cpu_cores": 0.38,
+            "mem_mib_max": 328
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 114
+          },
+          "redis": {
+            "cpu_cores": 0.24,
+            "mem_mib_max": 12
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.403,
+          "grafana": 0.002,
+          "jaeger": 0.0,
+          "k6-run-2dc9fb72dea5": 0.17,
+          "kafka": 0.052,
+          "kafka-exporter": 0.0,
+          "metering": 0.079,
+          "mock-upstream": 0.17,
+          "postgres": 0.064,
+          "prometheus": 0.0,
+          "redis": 0.04
+        }
+      },
+      {
+        "ok_p50_ms": 45.4,
+        "ok_p99_ms": 117.2,
+        "requests": 360000,
+        "rps": 7981.5,
+        "ok": 350345,
+        "non2xx": 9655,
+        "dropped": 0,
+        "p50_ms": 44.9,
+        "p95_ms": 85.7,
+        "p99_ms": 116.5,
+        "max_ms": 254.6,
+        "target_rps": 8000,
+        "ok_rps": 7785.4,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.5,
+            "mem_mib_max": 1087
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 396
+          },
+          "jaeger": {
+            "cpu_cores": 0.04,
+            "mem_mib_max": 467
+          },
+          "k6-run-774079fdf024": {
+            "cpu_cores": 1.26,
+            "mem_mib_max": 707
+          },
+          "kafka": {
+            "cpu_cores": 0.58,
+            "mem_mib_max": 791
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 24
+          },
+          "metering": {
+            "cpu_cores": 0.52,
+            "mem_mib_max": 543
+          },
+          "mock-upstream": {
+            "cpu_cores": 1.18,
+            "mem_mib_max": 592
+          },
+          "postgres": {
+            "cpu_cores": 0.45,
+            "mem_mib_max": 334
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 114
+          },
+          "redis": {
+            "cpu_cores": 0.26,
+            "mem_mib_max": 12
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.321,
+          "grafana": 0.001,
+          "jaeger": 0.005,
+          "k6-run-774079fdf024": 0.162,
+          "kafka": 0.074,
+          "kafka-exporter": 0.0,
+          "metering": 0.067,
+          "mock-upstream": 0.152,
+          "postgres": 0.058,
+          "prometheus": 0.0,
+          "redis": 0.033
+        }
+      },
+      {
+        "ok_p50_ms": 45.2,
+        "ok_p99_ms": 113.3,
+        "requests": 404998,
+        "rps": 8982.2,
+        "ok": 391930,
+        "non2xx": 13068,
+        "dropped": 0,
+        "p50_ms": 44.6,
+        "p95_ms": 83.1,
+        "p99_ms": 112.6,
+        "max_ms": 336.0,
+        "target_rps": 9000,
+        "ok_rps": 8709.6,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.61,
+            "mem_mib_max": 1111
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 396
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 546
+          },
+          "k6-run-8fe5a7134f5e": {
+            "cpu_cores": 1.28,
+            "mem_mib_max": 729
+          },
+          "kafka": {
+            "cpu_cores": 0.44,
+            "mem_mib_max": 788
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 28
+          },
+          "metering": {
+            "cpu_cores": 0.45,
+            "mem_mib_max": 540
+          },
+          "mock-upstream": {
+            "cpu_cores": 1.19,
+            "mem_mib_max": 588
+          },
+          "postgres": {
+            "cpu_cores": 0.46,
+            "mem_mib_max": 338
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 115
+          },
+          "redis": {
+            "cpu_cores": 0.27,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.3,
+          "grafana": 0.001,
+          "jaeger": 0.0,
+          "k6-run-8fe5a7134f5e": 0.147,
+          "kafka": 0.051,
+          "kafka-exporter": 0.0,
+          "metering": 0.052,
+          "mock-upstream": 0.137,
+          "postgres": 0.053,
+          "prometheus": 0.0,
+          "redis": 0.031
+        }
+      }
+    ]
+  },
+  "streams-2g": {
+    "at": "2026-10-01T22:12:07+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 2 CPU / 2g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 2.56,
+      "power": "battery",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "upstream_stream_ms": 30000,
+    "upstream_chunks": 30,
+    "ramp_s": 20,
+    "max_in_flight": null,
+    "gateway_mem_limit": "2g",
+    "steps": [
+      {
+        "streams": 4000,
+        "ramp_s": 20.0,
+        "completed": 4000,
+        "failed": 0,
+        "failures": {},
+        "peak_open": 4000,
+        "wall_ms": 50005,
+        "first_event_ms": {
+          "p50": 1002,
+          "p90": 1006,
+          "p99": 1090,
+          "max": 1223
+        },
+        "total_ms": {
+          "p50": 30012,
+          "p90": 30042,
+          "p99": 30103,
+          "max": 30211
+        },
+        "gateway": {
+          "mem_mib_max": 1380,
+          "mem_mib_at_start": 510,
+          "cpu_cores_mean": 0.55
+        },
+        "reconciliation": {
+          "k6_ok_responses": 4000,
+          "billed_events": 4000,
+          "lost": 0,
+          "double_billed": 0,
+          "rollup_requests_match": true,
+          "month_requests_match": true,
+          "tokens_match": true
+        },
+        "billed_by_status": {
+          "200": 4000
+        },
+        "mock_upstream_mem_mib_max": 1291
+      },
+      {
+        "streams": 6000,
+        "ramp_s": 20.0,
+        "completed": 6000,
+        "failed": 0,
+        "failures": {},
+        "peak_open": 6000,
+        "wall_ms": 50017,
+        "first_event_ms": {
+          "p50": 1001,
+          "p90": 1011,
+          "p99": 1115,
+          "max": 1177
+        },
+        "total_ms": {
+          "p50": 30011,
+          "p90": 30060,
+          "p99": 30143,
+          "max": 30234
+        },
+        "gateway": {
+          "mem_mib_max": 1784,
+          "mem_mib_at_start": 1374,
+          "cpu_cores_mean": 0.47
+        },
+        "reconciliation": {
+          "k6_ok_responses": 6000,
+          "billed_events": 6000,
+          "lost": 0,
+          "double_billed": 0,
+          "rollup_requests_match": true,
+          "month_requests_match": true,
+          "tokens_match": true
+        },
+        "billed_by_status": {
+          "200": 6000
+        },
+        "mock_upstream_mem_mib_max": 1300
+      },
+      {
+        "streams": 8000,
+        "ramp_s": 20.0,
+        "completed": 0,
+        "failed": 8000,
+        "failures": {
+          "IOException": 8000
+        },
+        "peak_open": 8000,
+        "wall_ms": 28449,
+        "first_event_ms": {
+          "p50": 1001,
+          "p90": 1101,
+          "p99": 3284,
+          "max": 8508
+        },
+        "total_ms": null,
+        "gateway": {
+          "mem_mib_max": 1851,
+          "mem_mib_at_start": 1745,
+          "cpu_cores_mean": 0.96
+        },
+        "reconciliation": {
+          "k6_ok_responses": 0,
+          "billed_events": 0,
+          "lost": 0,
+          "double_billed": 0,
+          "rollup_requests_match": true,
+          "month_requests_match": true,
+          "tokens_match": true
+        },
+        "billed_by_status": {},
+        "mock_upstream_mem_mib_max": 1311,
+        "gateway_after_failure": {
+          "status": "exited",
+          "oom_killed": false,
+          "exit_code": 3,
+          "restarts": 0,
+          "last_errors": [
+            "Terminating due to java.lang.OutOfMemoryError: Java heap space"
+          ]
+        }
+      }
+    ]
+  },
+  "capacity-4cpu-inflight256": {
+    "at": "2026-10-01T21:51:42+00:00",
+    "hardware": {
+      "host": "Apple M5",
+      "docker_cpus": "10",
+      "docker_mem_gb": 7.7,
+      "limits": "gateway 4 CPU / 2g, mock-upstream 3 CPU / 1.5 GB, metering 1 CPU / 768 MB (docker-compose.yml)",
+      "trace_sampling": "0.01",
+      "host_load_avg_1m_at_record": 9.64,
+      "power": "AC",
+      "note": "laptop run; other processes were active, so treat these as one machine's numbers, not a capacity guarantee"
+    },
+    "gateway_cpus": 4.0,
+    "duration_s": 45,
+    "steps": [
+      {
+        "ok_p50_ms": 41.1,
+        "ok_p99_ms": 91.6,
+        "requests": 180001,
+        "rps": 3990.7,
+        "ok": 180001,
+        "non2xx": 0,
+        "dropped": 0,
+        "p50_ms": 41.1,
+        "p95_ms": 72.5,
+        "p99_ms": 91.6,
+        "max_ms": 192.7,
+        "target_rps": 4000,
+        "ok_rps": 4000.0,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.01,
+            "mem_mib_max": 874
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 572
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 303
+          },
+          "k6-run-4b72f1db9452": {
+            "cpu_cores": 0.77,
+            "mem_mib_max": 669
+          },
+          "kafka": {
+            "cpu_cores": 0.29,
+            "mem_mib_max": 691
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 25
+          },
+          "metering": {
+            "cpu_cores": 0.36,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.73,
+            "mem_mib_max": 423
+          },
+          "postgres": {
+            "cpu_cores": 0.32,
+            "mem_mib_max": 354
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 53
+          },
+          "redis": {
+            "cpu_cores": 0.2,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.502,
+          "grafana": 0.002,
+          "jaeger": 0.0,
+          "k6-run-4b72f1db9452": 0.192,
+          "kafka": 0.072,
+          "kafka-exporter": 0.0,
+          "metering": 0.09,
+          "mock-upstream": 0.182,
+          "postgres": 0.08,
+          "prometheus": 0.0,
+          "redis": 0.05
+        }
+      },
+      {
+        "ok_p50_ms": 41.9,
+        "ok_p99_ms": 92.9,
+        "requests": 360001,
+        "rps": 7984.8,
+        "ok": 259303,
+        "non2xx": 100698,
+        "dropped": 0,
+        "p50_ms": 34.8,
+        "p95_ms": 69.6,
+        "p99_ms": 89.4,
+        "max_ms": 181.3,
+        "target_rps": 8000,
+        "ok_rps": 5762.3,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.38,
+            "mem_mib_max": 863
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 630
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 345
+          },
+          "k6-run-8fbbd6ded3a6": {
+            "cpu_cores": 1.36,
+            "mem_mib_max": 710
+          },
+          "kafka": {
+            "cpu_cores": 0.49,
+            "mem_mib_max": 691
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 25
+          },
+          "metering": {
+            "cpu_cores": 0.39,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.91,
+            "mem_mib_max": 427
+          },
+          "postgres": {
+            "cpu_cores": 0.38,
+            "mem_mib_max": 364
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 55
+          },
+          "redis": {
+            "cpu_cores": 0.23,
+            "mem_mib_max": 12
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.413,
+          "grafana": 0.002,
+          "jaeger": 0.0,
+          "k6-run-8fbbd6ded3a6": 0.236,
+          "kafka": 0.085,
+          "kafka-exporter": 0.0,
+          "metering": 0.068,
+          "mock-upstream": 0.158,
+          "postgres": 0.066,
+          "prometheus": 0.0,
+          "redis": 0.04
+        }
+      },
+      {
+        "ok_p50_ms": 44.3,
+        "ok_p99_ms": 145.0,
+        "requests": 443534,
+        "rps": 9817.6,
+        "ok": 245107,
+        "non2xx": 198427,
+        "dropped": 6458,
+        "p50_ms": 30.3,
+        "p95_ms": 84.1,
+        "p99_ms": 131.4,
+        "max_ms": 390.3,
+        "target_rps": 10000,
+        "ok_rps": 5446.8,
+        "usage": {
+          "gateway": {
+            "cpu_cores": 2.12,
+            "mem_mib_max": 969
+          },
+          "grafana": {
+            "cpu_cores": 0.01,
+            "mem_mib_max": 630
+          },
+          "jaeger": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 402
+          },
+          "k6-run-630df75ec9df": {
+            "cpu_cores": 2.64,
+            "mem_mib_max": 774
+          },
+          "kafka": {
+            "cpu_cores": 0.55,
+            "mem_mib_max": 792
+          },
+          "kafka-exporter": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 25
+          },
+          "metering": {
+            "cpu_cores": 0.35,
+            "mem_mib_max": 503
+          },
+          "mock-upstream": {
+            "cpu_cores": 0.81,
+            "mem_mib_max": 430
+          },
+          "postgres": {
+            "cpu_cores": 0.37,
+            "mem_mib_max": 365
+          },
+          "prometheus": {
+            "cpu_cores": 0.0,
+            "mem_mib_max": 56
+          },
+          "redis": {
+            "cpu_cores": 0.2,
+            "mem_mib_max": 11
+          }
+        },
+        "cpu_ms_per_request": {
+          "gateway": 0.389,
+          "grafana": 0.002,
+          "jaeger": 0.0,
+          "k6-run-630df75ec9df": 0.485,
+          "kafka": 0.101,
+          "kafka-exporter": 0.0,
+          "metering": 0.064,
+          "mock-upstream": 0.149,
+          "postgres": 0.068,
+          "prometheus": 0.0,
+          "redis": 0.037
+        }
+      }
+    ],
+    "max_in_flight": 256
+  }
+}

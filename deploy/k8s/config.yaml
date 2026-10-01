@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llmgw-config
+data:
+  DB_URL: jdbc:postgresql://postgres:5432/usage
+  DB_USER: usage
+  REDIS_HOST: redis
+  KAFKA_BOOTSTRAP: kafka:9092
+  UPSTREAM_BASE_URL: http://mock-upstream:8090
+  USAGE_TOPIC_PARTITIONS: "6"
+---
+# Development credential for the in-cluster Postgres only. A real deployment would source this
+# from a secret manager, not from the repository.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: llmgw-db
+type: Opaque
+stringData:
+  DB_PASSWORD: usage-dev-only

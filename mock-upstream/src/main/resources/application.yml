@@ -1,0 +1,37 @@
+server:
+  port: 8090
+  tomcat:
+    threads:
+      max: 400
+    max-connections: 20000
+    accept-count: 1000
+
+spring:
+  application:
+    name: mock-upstream
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    async:
+      # Tomcat's default async timeout is 30 s, which cut 30 s test streams off just before [DONE].
+      request-timeout: 300s
+
+mock:
+  median-ms: ${MOCK_MEDIAN_MS:40}
+  sigma: ${MOCK_SIGMA:0.35}
+  max-ms: ${MOCK_MAX_MS:2000}
+  error-rate: ${MOCK_ERROR_RATE:0}
+  stream-chunks: ${MOCK_STREAM_CHUNKS:8}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+    tags:
+      application: mock-upstream

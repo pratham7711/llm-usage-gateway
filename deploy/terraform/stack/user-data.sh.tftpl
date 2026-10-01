@@ -1,0 +1,25 @@
+#!/bin/bash
+# First boot of the k3s node. Rendered by Terraform; $${...} is a literal shell expansion.
+set -euxo pipefail
+
+# Cost backstop: the instance terminates itself (instance_initiated_shutdown_behavior) after
+# max_lifetime_minutes, even if the CI job that created it never runs terraform destroy.
+shutdown -h +${max_lifetime_minutes}
+
+dnf install -y python3 tar gzip
+
+# k3s pulls from ECR with a 12-hour token, longer than any run lives.
+mkdir -p /etc/rancher/k3s
+TOKEN=$(aws ecr get-login-password --region ${region})
+cat > /etc/rancher/k3s/registries.yaml <<EOF
+configs:
+  "${registry}":
+    auth:
+      username: AWS
+      password: "$${TOKEN}"
+EOF
+chmod 600 /etc/rancher/k3s/registries.yaml
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="${k3s_version}" sh -s - --write-kubeconfig-mode 600
+until /usr/local/bin/kubectl get nodes 2>/dev/null | grep -q ' Ready'; do sleep 3; done
+touch /var/run/llmgw-k3s-ready
