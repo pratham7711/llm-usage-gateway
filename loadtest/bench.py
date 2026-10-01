@@ -45,10 +45,16 @@ def k6(script, name, env, timeout=900):
     for k, v in {**env, "NAME": name}.items():
         args += ["-e", f"{k}={v}"]
     args += ["k6", "run", "--quiet", f"/scripts/{script}"]
+    path = os.path.join(RAW, name + ".json")
+    if os.path.exists(path):
+        os.remove(path)
     out = sh(args, timeout=timeout)
     line = next((l for l in out.splitlines() if l.startswith(name + ":")), out.strip()[-300:])
     print("  " + line, flush=True)
-    with open(os.path.join(RAW, name + ".json")) as f:
+    # A summary k6 failed to write must not be replaced by an older run's file of the same name.
+    if not os.path.exists(path):
+        raise RuntimeError(f"k6 wrote no summary to {path} (is {RAW} writable by the k6 container?)")
+    with open(path) as f:
         return parse_k6(json.load(f))
 
 
@@ -494,6 +500,9 @@ def main():
     elif what == "baseline":
         steps(rates, url="http://mock-upstream:8090", kind="baseline")
     elif what == "smoke":
+        # Warm up first: a cold JVM sheds while the JIT compiles, which is not what smoke checks.
+        k6("step.js", "smoke-warmup", {"RATE": rates[0], "DURATION": "30s"})
+        wait_lag_zero()
         reset_usage()
         res = k6("step.js", "smoke", {"RATE": rates[0], "DURATION": "20s"})
         rec = reconcile(res["ok"])

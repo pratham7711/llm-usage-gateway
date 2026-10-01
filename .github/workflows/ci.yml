@@ -35,6 +35,7 @@ jobs:
       - name: Short k6 run, then reconcile billed events against successful responses
         run: |
           mkdir -p results/raw
+          chmod 777 results/raw   # k6 runs as its own user and writes its summary here
           RATES=300 python3 loadtest/bench.py smoke
       - name: Stack logs on failure
         if: failure()
