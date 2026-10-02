@@ -9,6 +9,11 @@ data:
   KAFKA_BOOTSTRAP: kafka:9092
   UPSTREAM_BASE_URL: http://mock-upstream:8090
   USAGE_TOPIC_PARTITIONS: "6"
+  UPSTREAM_REQUEST_TIMEOUT: 60s
+  MAX_STREAM_DURATION: 90s
+  ASYNC_REQUEST_TIMEOUT: 120s
+  LEASE_TTL: 2m
+  LEASE_REAP_INTERVAL: 5s
 ---
 # Development credential for the in-cluster Postgres only. A real deployment would source this
 # from a secret manager, not from the repository.

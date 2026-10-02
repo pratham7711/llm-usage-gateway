@@ -7,11 +7,18 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -26,33 +33,55 @@ import tools.jackson.databind.json.JsonMapper;
  * interrupt only stops the client-facing writer; the drain finishes on its own thread and bills
  * the full usage with status 499.
  *
+ * Some streams end without a usage chunk: the upstream connection drops, the stream runs past
+ * the gateway's maximum duration and is cut, or the provider does not report usage at all. The
+ * provider has still generated, and billed, what was streamed, so the relay keeps the raw chunks
+ * and the gateway counts their text itself. Keeping the lines costs memory but no parsing on the
+ * hot path; past {@link #MAX_BUFFERED_CHARS} the rest is extrapolated from what was kept.
+ *
  * Lines pass through a small bounded queue, so a slow client still applies backpressure upstream.
  */
 final class SseRelay {
 
-  /** Receives the usage once the upstream stream has been fully read. */
+  /** What one stream carried, reported once it has been fully read (or abandoned). */
+  record StreamResult(int status, boolean usageReported, int promptTokens, int completionTokens,
+      Supplier<String> outputText, double unbufferedFactor) {}
+
   interface Billing {
-    void bill(int tokensIn, int tokensOut, int status);
+    void bill(StreamResult result);
   }
 
+  static final int MAX_BUFFERED_CHARS = 512 * 1024;
   private static final String END = new String("end-of-stream");
   private static final long WRITER_GRACE_SECONDS = 30;
 
   private final BlockingQueue<String> lines = new ArrayBlockingQueue<>(256);
   private final AtomicBoolean clientGone = new AtomicBoolean();
+  private final AtomicBoolean cut = new AtomicBoolean();
+  /** Orders the watchdog's interrupt against the drain finishing (see drain()). */
+  private final ReentrantLock deadlineLock = new ReentrantLock();
+  private boolean drained;
   private final CountDownLatch writerDone = new CountDownLatch(1);
+  private final List<String> payloads = new ArrayList<>();
+  private long bufferedChars;
+  private long droppedChars;
   private final InputStream upstream;
   private final boolean clientWantsUsage;
   private final JsonMapper json;
   private final Billing billing;
   private final Runnable onDrained;
+  private final ScheduledExecutorService watchdog;
+  private final Duration maxDuration;
 
-  SseRelay(InputStream upstream, boolean clientWantsUsage, JsonMapper json, Billing billing, Runnable onDrained) {
+  SseRelay(InputStream upstream, boolean clientWantsUsage, JsonMapper json, Billing billing, Runnable onDrained,
+      ScheduledExecutorService watchdog, Duration maxDuration) {
     this.upstream = upstream;
     this.clientWantsUsage = clientWantsUsage;
     this.json = json;
     this.billing = billing;
     this.onDrained = onDrained;
+    this.watchdog = watchdog;
+    this.maxDuration = maxDuration;
   }
 
   /**
@@ -80,8 +109,27 @@ final class SseRelay {
   }
 
   private void drain() {
+    Thread self = Thread.currentThread();
+    // Closing the stream alone does not wake a reader blocked inside it; the interrupt does.
+    ScheduledFuture<?> deadline = watchdog.schedule(() -> {
+      deadlineLock.lock();
+      try {
+        if (drained) return;
+        cut.set(true);
+        self.interrupt();
+      } finally {
+        deadlineLock.unlock();
+      }
+      try {
+        upstream.close();
+      } catch (IOException ignored) {
+        // Already broken; the reader sees that either way.
+      }
+    }, maxDuration.toMillis(), TimeUnit.MILLISECONDS);
+
     int in = 0;
     int out = 0;
+    boolean reported = false;
     int status = 200;
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(upstream, StandardCharsets.UTF_8))) {
       String line;
@@ -92,6 +140,7 @@ final class SseRelay {
           continue;
         }
         boolean pass = true;
+        boolean usageChunk = false;
         if (line.startsWith("data: ") && line.contains("\"usage\"")) {
           try {
             JsonNode chunk = json.readTree(line.substring(6));
@@ -99,7 +148,9 @@ final class SseRelay {
             if (u.isObject()) {
               in = u.path("prompt_tokens").asInt(0);
               out = u.path("completion_tokens").asInt(0);
-              if (!clientWantsUsage && chunk.path("choices").isEmpty()) {
+              reported = true;
+              usageChunk = chunk.path("choices").isEmpty();
+              if (!clientWantsUsage && usageChunk) {
                 pass = false;
                 droppedEvent = true;
               }
@@ -108,20 +159,61 @@ final class SseRelay {
             // Not a usage chunk after all; relay it untouched.
           }
         }
+        if (!usageChunk && line.startsWith("data: {")) keep(line);
         if (pass) forward(line);
       }
     } catch (IOException e) {
-      status = 502;
+      status = cut.get() ? 504 : 502;
     } finally {
+      deadline.cancel(false);
+      // Once drained is set under the lock the watchdog can no longer interrupt, so clearing the
+      // flag after it keeps a late deadline away from the queue offer and the billing call below.
+      deadlineLock.lock();
+      try {
+        drained = true;
+      } finally {
+        deadlineLock.unlock();
+      }
+      Thread.interrupted();
       forward(END);
       awaitWriter();
       if (clientGone.get() && status == 200) status = 499;
+      double factor = bufferedChars == 0 ? 1 : (double) (bufferedChars + droppedChars) / bufferedChars;
       try {
-        billing.bill(in, out, status);
+        billing.bill(new StreamResult(status, reported, in, out, this::outputText, factor));
       } finally {
         onDrained.run();
       }
     }
+  }
+
+  private void keep(String line) {
+    if (bufferedChars + line.length() > MAX_BUFFERED_CHARS) {
+      droppedChars += line.length();
+      return;
+    }
+    payloads.add(line);
+    bufferedChars += line.length();
+  }
+
+  /** The generated text the stream carried: content, tool-call arguments and reasoning. */
+  private String outputText() {
+    StringBuilder text = new StringBuilder();
+    for (String line : payloads) {
+      try {
+        for (JsonNode choice : json.readTree(line.substring(6)).path("choices")) {
+          JsonNode delta = choice.path("delta");
+          if (delta.path("content").isString()) text.append(delta.path("content").asString());
+          if (delta.path("reasoning_content").isString()) text.append(delta.path("reasoning_content").asString());
+          for (JsonNode call : delta.path("tool_calls")) {
+            text.append(call.path("function").path("arguments").asString(""));
+          }
+        }
+      } catch (JacksonException ignored) {
+        // A malformed chunk carried no countable text.
+      }
+    }
+    return text.toString();
   }
 
   /** Blocks while the client is slower than upstream; discards once the client has left. */

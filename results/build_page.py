@@ -230,6 +230,92 @@ def main():
                                   ("gateway MiB max", lambda r: r["gm"]), ("lost", lambda r: r["lost"]),
                                   ("double-billed", lambda r: r["dbl"])]))
 
+    races = [(k, doc[k]) for k in ("quota-race-v1", "quota-race-v2") if k in doc]
+    if races:
+        parts.append("<h2>Quota race: one tenant, a fixed token quota, hit hard</h2><p>A tenant with a 300,000-token "
+                     "monthly quota receives requests for 10 s at each rate; every figure is read from Postgres after the "
+                     "consumer lag reaches zero. v1 admitted against the last committed total, so requests in flight and "
+                     "events still in Kafka were invisible to it. v2 reserves each request's worst case at admission "
+                     "(prompt plus granted output), caps the output sent upstream at what the quota can still pay for, "
+                     "and settles to the real usage. Both versions ran on battery power on the same machine the same morning.</p>")
+        rows = [dict(r, ver=k.rsplit("-", 1)[1]) for k, v in races for r in v["runs"]]
+        parts.append(table(rows, [("version", lambda r: r["ver"]), ("rate", lambda r: r["rate"]),
+                                  ("quota", lambda r: r["quota_tokens"]), ("billed", lambda r: r["billed_tokens"]),
+                                  ("past quota", lambda r: r["overshoot_tokens"]), ("past quota %", lambda r: r["overshoot_pct"]),
+                                  ("requests served", lambda r: r["billed_ok_requests"])]))
+
+    kills = [(k, doc[k]) for k in sorted(doc) if k.startswith("gateway-kill-") and k != "gateway-kill-warmup"]
+    if kills:
+        parts.append("<h2>Gateway SIGKILL: every request the provider served, accounted for</h2><p>The gateway is killed "
+                     "with SIGKILL mid-run and restarted. The mock provider records the request id of every request it "
+                     "served; once the killed requests' leases expire and are reaped, each one is looked up in Postgres. "
+                     "A version that sends no request id is reconciled by counts.</p>")
+        parts.append(table([dict(v, key=k) for k, v in kills], [
+            ("version", lambda r: r["version"]), ("rate", lambda r: r["rate"]),
+            ("provider served", lambda r: r["provider_served_requests"]),
+            ("billed with tokens", lambda r: r["billed_rows_with_tokens"]),
+            ("served, not billed", lambda r: r.get("served_but_not_billed", r["unbilled_served_requests_by_count"])),
+            ("billed at reservation", lambda r: r.get("reaped_leases_billed_at_reservation", "")),
+            ("over-billed tokens", lambda r: r.get("reaped_overbilled_tokens", "")),
+            ("exact provider rows", lambda r: (f'{r["provider_rows_matching_exactly"]} / {r["provider_rows"]}'
+                                               if "provider_rows" in r else "")),
+            ("all billed at s", lambda r: r["all_billed_at_s"]),
+        ]))
+
+    cost = [(k, doc[k]) for k in ("capacity-2cpu-v2-ac-a", "capacity-2cpu-v1-ac", "capacity-2cpu-v2-ac-b",
+                                  "capacity-2cpu-v1-battery-a", "capacity-2cpu-v2-battery") if k in doc]
+    if cost:
+        parts.append("<h2>What leases cost</h2><p>The same 2-CPU gateway before leases (v1) and with them (v2), run back to back "
+                     "on the same machine, each after a 30 s warm-up. CPU-ms per request is the container's average cores times "
+                     "1000 over the requests it served. The battery pair is noisier; its v2 1000 req/s step followed a slow warm-up "
+                     "and is left out.</p>")
+        rows = []
+        for k, v in cost:
+            for st in v["steps"]:
+                if k == "capacity-2cpu-v2-battery" and st["target_rps"] == 1000:
+                    continue
+                c, u = st.get("cpu_ms_per_request", {}), st.get("usage", {})
+                rows.append(dict(run=k.replace("capacity-2cpu-", ""), rate=st["target_rps"], served=st["ok_rps"],
+                                 shed=st.get("non2xx", ""), p99=st.get("ok_p99_ms", ""), gw=c.get("gateway"), redis=c.get("redis"),
+                                 mem=u.get("gateway", {}).get("mem_mib_max")))
+        parts.append(table(rows, [("run", lambda r: r["run"]), ("offered", lambda r: r["rate"]), ("served/s", lambda r: r["served"]),
+                                  ("shed", lambda r: r["shed"]), ("admitted p99 ms", lambda r: r["p99"]),
+                                  ("gateway CPU-ms", lambda r: r["gw"]), ("Redis CPU-ms", lambda r: r["redis"]),
+                                  ("gateway MiB", lambda r: r["mem"])]))
+    if "coldstart-v1-vs-v2" in doc:
+        cs = doc["coldstart-v1-vs-v2"]
+        parts.append("<h3>Right after a restart</h3><p>Each gateway recreated 5 s before 30 s at 1,000 req/s, then 30 s more, "
+                     "in the order v1, v2, v2, v1. Shed requests got an immediate 503 from the in-flight limit while the JIT "
+                     "compiled the hot path.</p>")
+        parts.append(table(cs["runs"], [("order", lambda r: r["order"]), ("version", lambda r: r["version"]),
+                                        ("window", lambda r: r["window"]), ("served", lambda r: r["ok"]),
+                                        ("shed", lambda r: r["shed"]), ("admitted p50 ms", lambda r: r["ok_p50_ms"]),
+                                        ("admitted p99 ms", lambda r: r["ok_p99_ms"])]))
+
+    reals = [(k, doc[k]) for k in sorted(doc) if k.startswith("real-model-")]
+    for k, v in reals:
+        d, q = v["drift"], v["quota_race"]
+        ratio = "learned_prompt_excess_tokens" not in d
+        title = f'A real model: {esc(v["model"])} on Ollama' + (" (first calibration, a ratio, since replaced)" if ratio else "")
+        parts.append(f'<h2>{title}</h2><p>{esc(d["requests"])} requests (10 prompt shapes: '
+                     f'system messages, multi-turn, code, JSON; half streamed) through the gateway to a local model, with '
+                     f'every output also counted by the gateway. Error is the gateway\'s count minus the model\'s reported '
+                     f'count, as a percentage of the model\'s. The gateway counts with OpenAI\'s o200k vocabulary, so for a '
+                     f'non-OpenAI model the prompt error includes the model\'s own chat template.</p>')
+        pe, oe = d["prompt_estimate_error_pct"], d["output_estimate_error_pct"]
+        parts.append(table([dict(pe, part="prompt"), dict(oe, part="output")], [
+            ("part", lambda r: r["part"]), ("min %", lambda r: r["min"]), ("p10 %", lambda r: r["p10"]),
+            ("p50 %", lambda r: r["p50"]), ("p90 %", lambda r: r["p90"]), ("max %", lambda r: r["max"])]))
+        learned = (f'Prompt ratio the first calibration learned (provider count over the gateway\'s): {esc(d.get("learned_prompt_ratio"))}, '
+                   f'so every prompt was reserved at about three times its size.' if ratio else
+                   f'Prompt tokens the gateway learned to add for this model by the end of the run: {esc(round(d["learned_prompt_excess_tokens"], 1))}.')
+        parts.append(f'<p class="small">{learned} Usage sources: {esc(d["usage_sources"])}.</p>')
+        parts.append(table([q], [("quota", lambda r: r["quota_tokens"]), ("requests at once", lambda r: r["requests"]),
+                                 ("served", lambda r: r["served"]), ("refused (quota)", lambda r: r["refused_quota"]),
+                                 ("served with reduced max_tokens", lambda r: r["served_with_reduced_max_tokens"]),
+                                 ("quota_reserved retries", lambda r: r.get("retries_while_reserved", "not counted")),
+                                 ("billed", lambda r: r["billed_tokens"]), ("past quota", lambda r: r["overshoot_tokens"])]))
+
     k8s_runs = []
     for label, rel in (("cold start", ("k8s", "cold-start", "summary.json")), ("warm", ("k8s", "summary.json"))):
         path = os.path.join(HERE, *rel)

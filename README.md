@@ -8,6 +8,11 @@ enforces a rate limit and a monthly token quota, forwards the call upstream, rel
 metering service turns those events into billing rows in Postgres with no loss and no double
 billing, even when its consumer is killed or the broker restarts mid-run.
 
+Each request holds a lease in Redis from admission until Kafka has its usage event. That makes
+the quota hard (concurrent requests cannot jointly spend past it, and the provider is told the
+output limit the quota can still pay for) and lets a gateway that dies mid-request still bill
+what it served. Tenants can read their own live usage and cost from `GET /v1/usage`.
+
 Java 21 (virtual threads), Spring Boot 4, Kafka, PostgreSQL, Redis, OpenTelemetry, Prometheus,
 Grafana, k6, Testcontainers, Docker Compose, Kubernetes (k3s), Terraform.
 
@@ -17,6 +22,13 @@ Measured on one laptop (Apple M5): a Docker VM with 10 CPUs and 7.7 GB, shared b
 upstream and the whole stack. The mock answers in about 40 ms at the median and 90 ms at p99 (log
 normal, like a fast model), so every latency below includes that. Every run reconciles k6's
 successful responses against Postgres row by row. Raw data: [`results/summary.json`](results/summary.json).
+
+The throughput, latency, streaming, drain and Kubernetes rows were measured before leases were
+added. Leases cost throughput, measured back to back on the same laptop (a busier day, so smaller
+absolute numbers): the lease version served 12 to 20% less at saturation (3,394 and 3,122 req/s
+against 3,879 on 2 CPUs), spent 14 to 20% more gateway CPU and 50% more Redis CPU per request, and
+its gateway reached its 1 GiB memory limit (863 MiB before). The quota, crash and real-model rows
+are the lease version. Details: [DESIGN.md, "What that costs, measured"](docs/DESIGN.md#leases-a-hard-quota-and-billing-that-survives-a-gateway-crash).
 
 | | Measured |
 |---|---|
@@ -30,17 +42,22 @@ successful responses against Postgres row by row. Raw data: [`results/summary.js
 | On Kubernetes (k3s, k3d) | 30,001 requests at 500 req/s from a k6 Job inside the cluster: 0 errors, p99 **94.3 ms** warm, 0 lost, 0 double-billed. The cold run before it (pods 20 s old) had p99 300.9 ms while the CPU autoscaler took the gateway from 2 to 4 replicas. Both on battery, so latency is indicative |
 | Redis outage | fails closed with a 503 in **0.51 s** (with Lettuce's defaults every request hung for 60.1 s) |
 | Overload, before and after load shedding | p99 13.9 s with 140,264 requests never started, then admitted p99 129 ms while serving 5,011 req/s at 6,000 offered |
+| Quota under a burst | One tenant with a 300,000-token quota, hit for 10 s at 500, 2,000 and 5,000 req/s: **0 tokens past the quota** at every rate (299,981 to 299,988 billed). Before leases it went 1.06%, 4.8% and 14.33% past |
+| Gateway SIGKILLed mid-run | 1,000 req/s, gateway killed at t=20 s: the provider served 47,661 requests and **47,661 were billed**, matched one by one by request id. 0 unbilled, 0 billed without being served; the 41 in flight at the kill were billed at their reservation, 5,270 tokens (0.07%) over. Before leases the same kill lost 46 served requests (6,477 tokens), 4 of them already answered with a 200 |
+| A real model (qwen2.5:0.5b on Ollama) | 200 requests: the gateway's output count was within 1.6% of the model's at the median, but its prompt count read 47.8% low because of the model's chat template, so the gateway learns that overhead per model (20.4 tokens here). 60 concurrent requests on a 3,000-token quota used 2,982, 0 past |
 
 What each component spends per request, what broke under load in the first version, and the
 before and after numbers for each fix are in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ### At larger scale (projected, not measured)
 
-Sized from the measured CPU cost per request at 3,000 req/s and above (gateway 0.30 to 0.42 ms,
-Redis 0.031 to 0.050 ms; lighter load costs more per request, up to 0.50 ms on the gateway),
-the measured drain rate, and about 200 bytes of Postgres per event. They assume cost stays
-linear; from 1 to 2 CPUs throughput rose 1.85x, and from 2 to 4 it rose 1.6x before the laptop
-became the limit.
+Sized from the measured CPU cost per request at 3,000 req/s and above, before leases (gateway 0.30
+to 0.42 ms, Redis 0.031 to 0.050 ms; lighter load costs more per request, up to 0.50 ms on the
+gateway). With leases, add 14 to 20% to the gateway and 50% to Redis: Redis's ceiling then comes
+nearer 13,000 to 21,000 requests/s. The table below is the pre-lease sizing; it also uses the
+measured drain rate and about 200 bytes of Postgres per event. It assumes cost stays linear; from
+1 to 2 CPUs throughput rose 1.85x, and from 2 to 4 it rose 1.6x before the laptop became the
+limit.
 
 | Traffic | Gateway cores (70% busy) | Redis | Metering instances | `usage_event` growth |
 |---|---|---|---|---|
@@ -55,30 +72,39 @@ safe) and Postgres needs monthly partitions with raw rows aged out once rollups 
 ## How it works
 
 ```
- client ──► gateway ──► upstream LLM (mock-upstream in tests and benchmarks)
-             │  ▲
-   Lua script│  │quota (read)
-             ▼  │
-            Redis ◄──────────── quota write-back ───┐
-             │                                      │
-             └─ UsageEvent ─► Kafka usage-events ─► metering ─► Postgres
+ client ──► gateway ──► upstream LLM (mock-upstream in benchmarks; also run against Ollama)
+             │  ▲            max_tokens = what the quota can still pay for
+ reserve,    │  │
+ settle,     ▼  │
+ release    Redis: rate limit, quota, leases ◄── quota write-back, lease reaper ──┐
+             │                                                                  │
+             └─ UsageEvent ─► Kafka usage-events ─► metering ─► Postgres ────────┘
                  (key = tenant)  6 partitions      batch tx     usage_event (PK event_id)
 ```
 
 1. **Auth.** API keys are stored as SHA-256 digests and cached for 60 s.
-2. **Admission.** One Lua script does the token-bucket rate limit and the monthly quota check
-   atomically, on Redis's clock, so every replica agrees. If Redis is unreachable the gateway
-   fails closed with a 503 inside 500 ms.
+2. **Admission.** One Lua script does the token-bucket rate limit and reserves the request's
+   worst case against the monthly quota, counting what is used plus what requests in flight
+   hold, atomically and on Redis's clock, so every replica agrees. The prompt is counted locally
+   with OpenAI's tokenizer; the output is granted only as far as the quota can pay and sent
+   upstream as `max_tokens`. If Redis is unreachable the gateway fails closed with a 503 inside
+   500 ms.
 3. **Load shedding.** An in-flight limit (128 permits per CPU) answers the excess with an
    immediate 503 and `Retry-After`, so admitted requests stay fast under overload.
 4. **Relay.** Plain blocking code on virtual threads. Streams are relayed event by event; a
-   client that disconnects mid-stream is still billed for the full completion (status 499).
-5. **Usage event.** Keyed by tenant, handed to a dispatcher thread so a slow broker never
-   blocks a request.
+   client that disconnects mid-stream is still billed for the full completion (status 499). A
+   stream that ends without a usage report is billed from the text it carried, marked
+   `estimated`.
+5. **Settle and publish.** One script turns the reservation into real usage; the usage event,
+   keyed by tenant, goes to a dispatcher thread so a slow broker never blocks a request, and
+   Kafka's acknowledgement deletes the lease.
 6. **Metering.** At-least-once delivery plus an idempotent sink: offsets are committed only
    after the Postgres transaction, and `usage_event`'s primary key turns redelivery into a
    no-op. Only new rows feed the per-minute rollups and monthly totals, which are written
-   back to Redis with a set-if-greater script.
+   back to Redis with a set-if-greater script. Each row is priced at the model's price in force
+   when the request happened.
+7. **Lease reaper.** Metering bills any lease whose gateway died: a settled one exactly, an
+   unsettled one at its reservation, the most it could have cost, flagged `lease_expired`.
 
 [`docs/DESIGN.md`](docs/DESIGN.md) covers delivery semantics, partitioning, every failure mode
 and what measuring it found, in the order the fixes went in.
@@ -87,9 +113,9 @@ and what measuring it found, in the order the fixes went in.
 
 | Path | What |
 |---|---|
-| `gateway/` | The proxy: auth, admission (one Redis Lua script), load shedding, SSE relay, usage events |
-| `metering/` | Kafka batch consumer: idempotent insert, per-minute rollups, monthly totals, quota write-back, DLT |
-| `mock-upstream/` | OpenAI-shaped upstream with log-normal latency, so benchmarks cost nothing and repeat |
+| `gateway/` | The proxy: auth, admission and leases (Redis Lua scripts), token counting, load shedding, SSE relay, usage events, `/v1/usage` |
+| `metering/` | Kafka batch consumer: idempotent insert, per-minute rollups, monthly totals, pricing, quota write-back, lease reaper, DLT |
+| `mock-upstream/` | OpenAI-shaped upstream with log-normal latency, so benchmarks cost nothing and repeat; records which request ids it served, so crash tests can reconcile them |
 | `usage-common/` | The `UsageEvent` contract, topic names and the Flyway schema |
 | `loadtest/` | k6 scripts, a virtual-thread stream client, and `bench.py`, which runs every benchmark and chaos test and reconciles the results |
 | `deploy/docker-compose.yml` | The full stack, with Jaeger, Prometheus and a provisioned Grafana dashboard |
@@ -103,7 +129,7 @@ and what measuring it found, in the order the fixes went in.
 Needs Docker, JDK 21 and Maven.
 
 ```bash
-make test            # 22 tests: 17 integration tests against real Postgres, Kafka and Redis (Testcontainers), 5 unit tests
+make test            # 41 tests: 26 integration tests against real Postgres, Kafka and Redis (Testcontainers), 15 unit tests
 make up              # build jars and images, start the stack
 curl -s localhost:8080/v1/chat/completions -H 'Authorization: Bearer sk-dev-demo' \
   -H 'Content-Type: application/json' -d '{"model":"mock-small","messages":[{"role":"user","content":"hi"}]}'
@@ -120,6 +146,9 @@ python3 loadtest/bench.py consumer-kill                   # SIGKILL metering mid
 python3 loadtest/bench.py broker-restart                  # restart Kafka mid-run, reconcile
 GATEWAY_CPUS=4 python3 loadtest/bench.py capacity         # CPU and memory per component per request
 python3 loadtest/bench.py drain                           # how fast a Kafka backlog becomes billing rows
+VERSION=v2 python3 loadtest/bench.py quota-race           # one tenant, fixed quota, 500 to 5,000 req/s
+VERSION=v2 python3 loadtest/bench.py gateway-kill         # SIGKILL the gateway mid-run, reconcile every served request
+MODEL=qwen2.5:0.5b python3 loadtest/bench.py real-model   # token-count drift and the quota race against a real model
 python3 results/build_page.py                             # render results/index.html
 make k3d-up && deploy/k8s/bench-on-cluster.sh             # the same stack on k3s
 ```
@@ -132,6 +161,14 @@ MOCK_MEDIAN_MS=30000 MOCK_SIGMA=0 MOCK_MAX_MS=60000 MOCK_STREAM_CHUNKS=30 \
 MAX_IN_FLIGHT=30000 docker compose -f deploy/docker-compose.yml up -d --force-recreate gateway
 MOCK_MEDIAN_MS=30000 MOCK_STREAM_CHUNKS=30 MAX_IN_FLIGHT=30000 COUNTS=2000,5000,10000,20000 \
   python3 loadtest/bench.py streams
+```
+
+The real-model run needs [Ollama](https://ollama.com) with the model pulled, and the gateway
+pointed at it with every output counted:
+
+```bash
+UPSTREAM_BASE_URL=http://host.docker.internal:11434 ESTIMATE_SAMPLE_RATE=1.0 \
+  docker compose -f deploy/docker-compose.yml up -d gateway
 ```
 
 `bench.py` refuses to run on battery power: macOS throttles the CPU and the numbers stop being
@@ -152,10 +189,16 @@ to report. Apply `bootstrap` once in a personal account, then run the workflow.
 
 ## Limits, stated plainly
 
-- The upstream is a mock with realistic latency, not a paid LLM API.
+- Capacity and failure benchmarks use a mock upstream with realistic latency. Token counting and
+  the quota were also run against a real model (qwen2.5:0.5b on Ollama), but not a paid API.
 - Every setup runs one Kafka broker and one Redis. Production needs replicas
   (`replication.factor=3`, `min.insync.replicas=2`; Redis with a replica and failover).
-- A gateway crash loses events still in memory (the dispatch queue and producer buffer:
-  normally milliseconds of traffic). An outbox would close that gap.
-- Quota can overshoot by roughly consumer lag times request size, because admission reads the
-  last committed monthly total.
+- A request whose gateway is killed mid-flight is billed at its reservation, an upper bound, not
+  at what it actually used. The row says so (`lease_expired`).
+- Near the end of a quota, a burst is refused while earlier requests hold worst-case
+  reservations, even if they use less. Those refusals are 429 `quota_reserved` with
+  `Retry-After: 1`, and a retry usually fits.
+- The learned prompt overhead per model lives in memory, so after a restart the first requests to
+  a model with a chat template can reserve too little prompt until it has seen one response.
+- Redis fsyncs its append-only log every second, so a Redis crash can lose up to a second of
+  lease writes.

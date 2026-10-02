@@ -48,6 +48,8 @@ class MeteringIntegrationTest {
   @Autowired JdbcTemplate jdbc;
   @Autowired StringRedisTemplate redisTemplate;
   @Autowired JsonMapper json;
+  @Autowired LeaseReaper reaper;
+  @Autowired PriceBook prices;
 
   private UsageEvent event(String tenant, int in, int out, int status, Instant at) {
     return new UsageEvent(UUID.randomUUID(), tenant, "m", in, out, 12, status, false, at);
@@ -123,5 +125,79 @@ class MeteringIntegrationTest {
         .map(r -> new String(r.headers().lastHeader("dlt-reason").value(), StandardCharsets.UTF_8)).toList();
     assertThat(reasons).anyMatch(s -> s.startsWith("unparseable"));
     assertThat(reasons).contains("negative token count");
+  }
+  @Test
+  void reaperBillsAnAbandonedLeaseAtItsReservationAndRepublishesASettledOneOnce() throws Exception {
+    String t = "lt-13";
+    Instant now = Instant.now();
+    String month = Topics.month(now);
+    // A request the gateway admitted and never settled (it crashed): 9 prompt tokens and 40 output
+    // tokens reserved, from a local prompt count of 8.
+    UUID abandoned = UUID.randomUUID();
+    UsageEvent template = new UsageEvent(abandoned, t, "mock-small", 8, 0, 0, 0, false, now,
+        UsageEvent.SOURCE_LEASE_EXPIRED, 8, null);
+    redisTemplate.opsForHash().put(Topics.leaseKey(t), abandoned.toString(), "H|49|9|" + month + "|" + json.writeValueAsString(template));
+    redisTemplate.opsForZSet().add(Topics.leaseExpiryKey(t), abandoned.toString(), 0);
+    redisTemplate.opsForValue().increment(Topics.heldKey(t, month), 49);
+    // A request that settled (its usage is already counted) and whose event Kafka acknowledged, but
+    // the gateway died before deleting the lease: the reaper publishes it again.
+    UUID settled = UUID.randomUUID();
+    UsageEvent real = new UsageEvent(settled, t, "mock-small", 11, 7, 5, 200, false, now,
+        UsageEvent.SOURCE_PROVIDER, 8, null);
+    redisTemplate.opsForHash().put(Topics.leaseKey(t), settled.toString(), "S|" + json.writeValueAsString(real));
+    redisTemplate.opsForZSet().add(Topics.leaseExpiryKey(t), settled.toString(), 0);
+    redisTemplate.opsForValue().increment(Topics.quotaKey(t, month), 18);
+    send(real);
+    // A request still running: its lease has not expired and must be left alone.
+    UUID live = UUID.randomUUID();
+    redisTemplate.opsForHash().put(Topics.leaseKey(t), live.toString(), "H|49|9|" + month + "|" + json.writeValueAsString(template));
+    redisTemplate.opsForZSet().add(Topics.leaseExpiryKey(t), live.toString(), System.currentTimeMillis() + 3_600_000);
+    redisTemplate.opsForValue().increment(Topics.heldKey(t, month), 49);
+
+    // The scheduled pass may run at the same time; claiming is atomic, so that is safe.
+    reaper.reapAll();
+
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      assertThat(count("select count(*) from usage_event where tenant_id = ?", t)).isEqualTo(2);
+      assertThat(count("select tokens from tenant_month_usage where tenant_id = ? and month = ?", t, month)).isEqualTo(49 + 18);
+    });
+    var row = jdbc.queryForMap("select tokens_in, tokens_out, status, usage_source, est_tokens_in, cost_nano_usd "
+        + "from usage_event where event_id = ?", abandoned);
+    assertThat(row.get("tokens_in")).isEqualTo(9);
+    assertThat(row.get("tokens_out")).isEqualTo(40);
+    assertThat(row.get("status")).isEqualTo(0);
+    assertThat(row.get("usage_source")).isEqualTo(UsageEvent.SOURCE_LEASE_EXPIRED);
+    assertThat(row.get("est_tokens_in")).isEqualTo(8);
+    // mock-small is priced like gpt-4o-mini: $0.15 in and $0.60 out per million tokens.
+    assertThat(row.get("cost_nano_usd")).isEqualTo(9L * 150 + 40L * 600);
+
+    assertThat(redisTemplate.opsForValue().get(Topics.heldKey(t, month))).isEqualTo("49");
+    assertThat(redisTemplate.opsForValue().get(Topics.quotaKey(t, month))).isEqualTo("67");
+    assertThat(redisTemplate.opsForHash().keys(Topics.leaseKey(t))).containsExactly(live.toString());
+    await().atMost(Duration.ofSeconds(30))
+        .until(() -> redisTemplate.opsForList().size(Topics.reapedKey(t)) == 0);
+
+    // Running it again finds nothing more to bill.
+    reaper.reapAll();
+    assertThat(count("select count(*) from usage_event where tenant_id = ?", t)).isEqualTo(2);
+  }
+
+  @Test
+  void pricesEachRequestAtThePriceInForceWhenItOccurred() throws Exception {
+    jdbc.update("insert into model_price values ('m-priced', '2026-01-01', 1.00, 2.00), ('m-priced', '2026-06-01', 3.00, 4.00)");
+    prices.reload();
+    Instant march = Instant.parse("2026-03-10T10:00:00Z");
+    Instant july = Instant.parse("2026-07-10T10:00:00Z");
+    send(new UsageEvent(UUID.randomUUID(), "lt-14", "m-priced", 100, 10, 1, 200, false, march));
+    send(new UsageEvent(UUID.randomUUID(), "lt-14", "m-priced", 100, 10, 1, 200, false, july));
+
+    await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+      assertThat(count("select cost_nano_usd from tenant_month_usage where tenant_id = 'lt-14' and month = '2026-03'"))
+          .isEqualTo(100L * 1_000 + 10L * 2_000);
+      assertThat(count("select cost_nano_usd from tenant_month_usage where tenant_id = 'lt-14' and month = '2026-07'"))
+          .isEqualTo(100L * 3_000 + 10L * 4_000);
+      assertThat(count("select sum(cost_nano_usd) from usage_rollup_minute where tenant_id = 'lt-14'"))
+          .isEqualTo(120_000L + 340_000L);
+    });
   }
 }

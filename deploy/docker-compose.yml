@@ -29,6 +29,9 @@ services:
 
   redis:
     image: redis:7.4-alpine
+    # Leases (the record of every request admitted but not yet durably billed) live here, so Redis
+    # keeps an append-only log, fsynced every second.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports: ["6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -109,8 +112,14 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/usage
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP: kafka:9092
-      UPSTREAM_BASE_URL: http://mock-upstream:8090
+      UPSTREAM_BASE_URL: ${UPSTREAM_BASE_URL:-http://mock-upstream:8090}
       MAX_IN_FLIGHT: ${MAX_IN_FLIGHT:-0}
+      ESTIMATE_SAMPLE_RATE: ${ESTIMATE_SAMPLE_RATE:-0.01}
+      # Short limits for the local stack, so an abandoned lease is reaped within ~2 minutes.
+      UPSTREAM_REQUEST_TIMEOUT: ${UPSTREAM_REQUEST_TIMEOUT:-60s}
+      MAX_STREAM_DURATION: ${MAX_STREAM_DURATION:-90s}
+      ASYNC_REQUEST_TIMEOUT: ${ASYNC_REQUEST_TIMEOUT:-120s}
+      LEASE_TTL: ${LEASE_TTL:-2m}
       JVM_OPTS: ${GATEWAY_JVM_OPTS:--XX:+UseG1GC -XX:MaxRAMPercentage=65}
     ports: ["8080:8080"]
     # Readiness, so `up --wait` returns only after Flyway has run and the app accepts traffic.
@@ -136,6 +145,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/usage
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP: kafka:9092
+      LEASE_REAP_INTERVAL: ${LEASE_REAP_INTERVAL:-5s}
     ports: ["8081:8081"]
     # Readiness, so `up --wait` returns only after Flyway has run and the app accepts traffic.
     healthcheck:

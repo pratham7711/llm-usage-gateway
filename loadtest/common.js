@@ -14,11 +14,11 @@ const PROMPTS = [
 ];
 
 export function chat(stream) {
-  const tenant = TENANTS[Math.floor(Math.random() * TENANTS.length)];
+  const tenant = __ENV.TENANT || TENANTS[Math.floor(Math.random() * TENANTS.length)];
   const body = JSON.stringify({
     model: 'mock-small',
     stream,
-    max_tokens: 256,
+    max_tokens: Number(__ENV.MAX_TOKENS || 256),
     messages: [{ role: 'user', content: PROMPTS[Math.floor(Math.random() * PROMPTS.length)] }],
   });
   const res = http.post(`${BASE}/v1/chat/completions`, body, {

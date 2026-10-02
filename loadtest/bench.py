@@ -11,6 +11,11 @@
   python3 loadtest/bench.py drain       stop metering, build a Kafka backlog, time how fast it is billed
   python3 loadtest/bench.py streams     thousands of slow streams open at once (needs the slow mock)
   python3 loadtest/bench.py smoke       20 s run + reconciliation, non-zero exit on any mismatch (CI)
+  python3 loadtest/bench.py quota-race  one tenant with a fixed token quota, hit hard: how far past it is billed
+  python3 loadtest/bench.py gateway-kill    SIGKILL the gateway mid-run, then reconcile what the provider
+                                            served against what was billed, request by request
+  python3 loadtest/bench.py real-model      a real local model (Ollama) behind the gateway: tokenizer drift
+                                            against the model's own usage, and a quota race it must not pass
 
 Every run appends its numbers to results/summary.json. Nothing here is estimated: each figure is
 read from k6's summary, from Postgres, or from the services' Prometheus endpoints.
@@ -23,6 +28,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -85,7 +91,8 @@ def psql(sql):
 def reset_usage():
     psql("truncate usage_event, usage_rollup_minute, tenant_month_usage")
     sh(["docker", "exec", "llmgw-redis-1", "sh", "-c",
-        "redis-cli --scan --pattern 'quota:*' | xargs -r redis-cli del >/dev/null"])
+        "redis-cli --scan --pattern 'quota:*' | xargs -r redis-cli del >/dev/null; "
+        "redis-cli --scan --pattern 'lease:*' | xargs -r redis-cli del >/dev/null"])
 
 
 def prom_counter(url, name, labels):
@@ -152,7 +159,7 @@ def reconcile(k6_ok):
     tokens_events = int(psql("select coalesce(sum(tokens_in + tokens_out),0) from usage_event"))
     tokens_month = int(psql("select coalesce(sum(tokens),0) from tenant_month_usage"))
     redis_tokens = 0
-    keys = sh(["docker", "exec", "llmgw-redis-1", "redis-cli", "--scan", "--pattern", "quota:*"]).split()
+    keys = sh(["docker", "exec", "llmgw-redis-1", "redis-cli", "--scan", "--pattern", "quota:used:*"]).split()
     for k in keys:
         redis_tokens += int(sh(["docker", "exec", "llmgw-redis-1", "redis-cli", "get", k]).strip() or 0)
     return {
@@ -387,6 +394,9 @@ def capacity(rates, duration_s=45):
     # The in-flight limit caps throughput at limit / mean latency (Little's law), so a run with an
     # explicit MAX_IN_FLIGHT is recorded separately from the default (128 per CPU).
     name = f"capacity-{cpus}cpu" + (f"-inflight{limit}" if int(os.environ.get("MAX_IN_FLIGHT", "0")) else "")
+    # A comparison run (say, two gateway versions back to back) must not overwrite the reference run.
+    if os.environ.get("TAG"):
+        name += f"-{os.environ['TAG']}"
     print("warm-up 30s @ 1000 rps", flush=True)
     k6("step.js", f"{name}-warmup", {"RATE": 1000, "DURATION": "30s"})
     out = []
@@ -476,6 +486,308 @@ def streams(counts, ramp_s=20):
         "steps": out})
 
 
+RACE_TENANT = "race"
+
+
+def race_tenant(quota):
+    psql(f"insert into tenant (id, name, rate_per_sec, burst, monthly_token_quota) values "
+         f"('{RACE_TENANT}', 'Quota race', 100000, 200000, {quota}) "
+         f"on conflict (id) do update set monthly_token_quota = excluded.monthly_token_quota, "
+         f"rate_per_sec = excluded.rate_per_sec, burst = excluded.burst")
+    psql(f"insert into api_key (key_hash, tenant_id, label) values "
+         f"(encode(sha256(convert_to('sk-dev-{RACE_TENANT}', 'UTF8')), 'hex'), '{RACE_TENANT}', 'dev') "
+         f"on conflict (key_hash) do nothing")
+    psql(f"delete from usage_event where tenant_id = '{RACE_TENANT}'")
+    psql(f"delete from usage_rollup_minute where tenant_id = '{RACE_TENANT}'")
+    psql(f"delete from tenant_month_usage where tenant_id = '{RACE_TENANT}'")
+    sh(["docker", "exec", "llmgw-redis-1", "sh", "-c",
+        f"redis-cli --scan --pattern '*{{{RACE_TENANT}}}*' | xargs -r redis-cli del >/dev/null"])
+
+
+def quota_race(rates, quota, duration_s=10, version="current"):
+    """A tenant with a fixed monthly token quota is hit at each rate until it runs out.
+
+    The quota is a billing control, so the number that matters is how many tokens were billed past
+    it. Every figure is read back from Postgres after the consumer lag reaches zero.
+    """
+    print("warm-up 30s @ 1000 rps", flush=True)
+    k6("step.js", "quota-race-warmup", {"RATE": 1000, "DURATION": "30s"})
+    runs = []
+    for rate in rates:
+        race_tenant(quota)
+        time.sleep(2)
+        res = k6("step.js", f"quota-race-{version}-{rate}",
+                 {"RATE": rate, "DURATION": f"{duration_s}s", "TENANT": RACE_TENANT})
+        time.sleep(3)
+        wait_lag_zero()
+        time.sleep(2)
+        billed = int(psql(f"select coalesce(sum(tokens),0) from tenant_month_usage where tenant_id = '{RACE_TENANT}'") or 0)
+        rows = int(psql(f"select count(*) from usage_event where tenant_id = '{RACE_TENANT}'"))
+        ok_rows = int(psql(f"select count(*) from usage_event where tenant_id = '{RACE_TENANT}' and status = 200"))
+        out = {
+            "version": version,
+            "rate": rate,
+            "duration_s": duration_s,
+            "quota_tokens": quota,
+            "billed_tokens": billed,
+            "overshoot_tokens": billed - quota,
+            "overshoot_pct": round(100.0 * (billed - quota) / quota, 2),
+            "billed_requests": rows,
+            "billed_ok_requests": ok_rows,
+            "k6": res,
+        }
+        print(f"  quota {quota}: billed {billed} ({out['overshoot_pct']:+}%), {ok_rows} requests served", flush=True)
+        runs.append(out)
+        record(f"quota-race-{version}", {"runs": runs})
+
+
+MOCK = "llmgw-mock-upstream-1"
+
+
+def mock(path, method="GET"):
+    return sh(["docker", "exec", MOCK, "curl", "-fsS", "-X", method, f"http://localhost:8090{path}"], timeout=120)
+
+
+def open_leases():
+    """Leases not yet released plus reaped records not yet acknowledged by Kafka, across all tenants."""
+    out = sh(["docker", "exec", "llmgw-redis-1", "sh", "-c",
+              "for k in $(redis-cli --scan --pattern 'lease:{*'); do redis-cli hlen \"$k\"; done; "
+              "for k in $(redis-cli --scan --pattern 'lease:reaped:*'); do redis-cli llen \"$k\"; done"])
+    return sum(int(x) for x in out.split() if x.strip().isdigit())
+
+
+def wait_healthy(container, timeout=180):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        state = sh(["docker", "inspect", container, "--format", "{{.State.Health.Status}}"], check=False).strip()
+        if state == "healthy":
+            return time.time() - t0
+        time.sleep(1)
+    raise RuntimeError(f"{container} did not become healthy")
+
+
+def gateway_kill(rate=1000, duration=60, kill_at=20, down_s=5, version="current"):
+    """SIGKILL the gateway under load and account for every request the provider served.
+
+    A killed gateway cannot publish anything, so what this measures is what the design recovers
+    afterwards. The mock provider records the X-Request-Id of every request it served (the gateway
+    sends its lease id there); after the leases of the killed requests expire and are reaped, each
+    served request is looked up in Postgres. A gateway that sends no request id (v1) is reconciled by
+    counts instead.
+    """
+    print(f"warm-up 30s @ {rate} rps", flush=True)
+    k6("step.js", "gateway-kill-warmup", {"RATE": rate, "DURATION": "30s"})
+    wait_lag_zero()
+    time.sleep(5)
+    reset_usage()
+    mock("/stats/reset?record=true", "POST")
+    marks = {}
+    t0 = time.time()
+
+    def inject():
+        time.sleep(kill_at)
+        marks["killed_at_s"] = round(time.time() - t0, 1)
+        print(f"  t={marks['killed_at_s']}s: SIGKILL gateway", flush=True)
+        sh(["docker", "kill", "-s", "KILL", "llmgw-gateway-1"])
+        time.sleep(down_s)
+        sh(["docker", "start", "llmgw-gateway-1"])
+        wait_healthy("llmgw-gateway-1")
+        marks["healthy_at_s"] = round(time.time() - t0, 1)
+        print(f"  t={marks['healthy_at_s']}s: gateway healthy again", flush=True)
+
+    injector = threading.Thread(target=inject, daemon=True)
+    injector.start()
+    res = k6("step.js", f"gateway-kill-{version}", {"RATE": rate, "DURATION": f"{duration}s"}, timeout=duration + 600)
+    injector.join()
+    k6_end = time.time() - t0
+
+    # The killed requests' leases expire LEASE_TTL after admission; the reaper then bills them.
+    print("  waiting for every lease to be reaped and billed...", flush=True)
+    t1 = time.time()
+    while True:
+        leases = open_leases()
+        if leases == 0 and consumer_lag() == 0:
+            break
+        if time.time() - t1 > 900:
+            raise RuntimeError(f"{leases} leases still open after 15 minutes")
+        time.sleep(2)
+    time.sleep(3)
+    settled_after_s = round(time.time() - t0, 1)
+
+    served = json.loads(mock("/stats/served"))
+    ids = {}
+    for line in mock("/stats/request-ids").splitlines():
+        rid, p, c = line.split()
+        ids[rid] = (int(p), int(c))
+    billed = {}
+    for line in psql("select event_id, tokens_in, tokens_out, status, usage_source from usage_event").splitlines():
+        eid, tin, tout, status, source = line.split("|")
+        billed[eid] = (int(tin), int(tout), int(status), source)
+    with_tokens = [k for k, v in billed.items() if v[0] + v[1] > 0]
+    out = {
+        "version": version,
+        "rate": rate,
+        "duration_s": duration,
+        "fault": f"docker kill -s KILL llmgw-gateway-1 at t={kill_at}s, docker start {down_s}s later",
+        **marks,
+        "k6_finished_at_s": round(k6_end, 1),
+        "all_billed_at_s": settled_after_s,
+        "k6": res,
+        "provider_served_requests": served["requests"],
+        "provider_served_tokens": served["tokens"],
+        "billed_rows": len(billed),
+        "billed_rows_with_tokens": len(with_tokens),
+        "billed_tokens": sum(v[0] + v[1] for v in billed.values()),
+        "unbilled_served_requests_by_count": served["requests"] - len(with_tokens),
+    }
+    if ids:
+        expired = [k for k, v in billed.items() if v[3] == "lease_expired"]
+        expired_served = [k for k in expired if k in ids]
+        provider_rows = [k for k, v in billed.items() if v[3] == "provider" and k in ids]
+        out.update({
+            "served_ids_recorded": len(ids),
+            "served_but_not_billed": sum(1 for k in ids if k not in billed),
+            "billed_with_tokens_but_never_served": sum(1 for k in with_tokens if k not in ids),
+            "provider_rows_matching_exactly": sum(1 for k in provider_rows if billed[k][:2] == ids[k]),
+            "provider_rows": len(provider_rows),
+            "reaped_leases_billed_at_reservation": len(expired),
+            "reaped_leases_the_provider_had_served": len(expired_served),
+            "reaped_overbilled_tokens": sum(billed[k][0] + billed[k][1] - sum(ids[k]) for k in expired_served),
+            "estimated_rows": sum(1 for v in billed.values() if v[3] == "estimated"),
+        })
+    print(json.dumps({k: v for k, v in out.items() if k != "k6"}, indent=2), flush=True)
+    record(f"gateway-kill-{version}", out)
+    mock("/stats/reset?record=false", "POST")
+
+
+REAL_PROMPTS = [
+    [{"role": "user", "content": "hi"}],
+    [{"role": "user", "content": "Summarise last week of campaign performance in three bullet points."}],
+    [{"role": "system", "content": "You are a terse assistant. Answer in one sentence."},
+     {"role": "user", "content": "Why do idempotent consumers matter in event-driven billing?"}],
+    [{"role": "user", "content": "Write a Python function that merges two sorted lists, with a docstring and tests."}],
+    [{"role": "user", "content": "Rewrite as a formal email: the October invoice is ready and will be paid in five days."}],
+    [{"role": "user", "content": "In three sentences, explain what a monthly token quota is."}],
+    [{"role": "user", "content": "Explain the difference between at-least-once and exactly-once delivery. " * 6}],
+    [{"role": "system", "content": "You review SQL."},
+     {"role": "user", "content": "select tenant_id, sum(tokens) from usage_event where occurred_at > now() - interval '1 day' group by 1;"},
+     {"role": "assistant", "content": "The query is fine, but it needs an index on occurred_at."},
+     {"role": "user", "content": "Which index exactly, and would a BRIN index work here?"}],
+    [{"role": "user", "content": "List ten JSON field names for a usage event, as a JSON array only."}],
+    [{"role": "user", "content": "Tell me a two-line story about a rate limiter that learned to say no."}],
+]
+
+
+def gateway_post(key, body, timeout=180):
+    req = urllib.request.Request("http://localhost:8080/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read().decode(), dict(r.headers)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode(), dict(e.headers)
+
+
+def tenant_with_key(tid, quota, rate=100000):
+    psql(f"insert into tenant (id, name, rate_per_sec, burst, monthly_token_quota) values "
+         f"('{tid}', '{tid}', {rate}, {rate * 2}, {quota}) on conflict (id) do update set "
+         f"monthly_token_quota = excluded.monthly_token_quota")
+    psql(f"insert into api_key (key_hash, tenant_id, label) values "
+         f"(encode(sha256(convert_to('sk-dev-{tid}', 'UTF8')), 'hex'), '{tid}', 'dev') on conflict (key_hash) do nothing")
+    for t in ("usage_event", "usage_rollup_minute", "tenant_month_usage"):
+        psql(f"delete from {t} where tenant_id = '{tid}'")
+    sh(["docker", "exec", "llmgw-redis-1", "sh", "-c",
+        f"redis-cli --scan --pattern '*{{{tid}}}*' | xargs -r redis-cli del >/dev/null"])
+    return f"sk-dev-{tid}"
+
+
+def pct(xs, q):
+    xs = sorted(xs)
+    return round(xs[min(len(xs) - 1, int(q * len(xs)))], 1) if xs else None
+
+
+def real_model(model, n=200, concurrency=4, quota=3000, race_requests=60):
+    """Needs the gateway pointed at Ollama with every output counted:
+    UPSTREAM_BASE_URL=http://host.docker.internal:11434 ESTIMATE_SAMPLE_RATE=1.0 docker compose up -d gateway
+    """
+    import random
+    from concurrent.futures import ThreadPoolExecutor
+    rnd = random.Random(7)
+    key = tenant_with_key("real", 10**12)
+    print(f"{n} requests to {model}, {concurrency} at a time", flush=True)
+
+    def one(i):
+        body = {"model": model, "messages": REAL_PROMPTS[i % len(REAL_PROMPTS)], "max_tokens": rnd.choice([16, 64, 128, 256]),
+                "stream": i % 2 == 1}
+        status, _, _ = gateway_post(key, body)
+        return status
+
+    t0 = time.time()
+    with ThreadPoolExecutor(concurrency) as pool:
+        statuses = list(pool.map(one, range(n)))
+    took = time.time() - t0
+    wait_lag_zero()
+    time.sleep(2)
+    rows = [l.split("|") for l in psql(
+        "select tokens_in, tokens_out, coalesce(est_tokens_in, -1), coalesce(est_tokens_out, -1), usage_source, streamed "
+        "from usage_event where tenant_id = 'real' and status = 200").splitlines()]
+    prompt_err, out_err, sources = [], [], {}
+    for tin, tout, ein, eout, src, _ in rows:
+        tin, tout, ein, eout = int(tin), int(tout), int(ein), int(eout)
+        sources[src] = sources.get(src, 0) + 1
+        if src == "provider" and tin > 0 and ein >= 0:
+            prompt_err.append(100.0 * (ein - tin) / tin)
+        if src == "provider" and tout > 0 and eout >= 0:
+            out_err.append(100.0 * (eout - tout) / tout)
+    calib = None
+    try:
+        calib = prom_counter("http://localhost:8080/actuator/prometheus", "gateway_token_prompt_excess", {"model": model})
+    except Exception:
+        pass
+    drift = {
+        "requests": n, "ok": statuses.count(200), "seconds": round(took, 1), "billed_rows": len(rows), "usage_sources": sources,
+        "prompt_estimate_error_pct": {"p50": pct(prompt_err, .5), "p10": pct(prompt_err, .1), "p90": pct(prompt_err, .9),
+                                      "min": pct(prompt_err, 0), "max": pct(prompt_err, 1)},
+        "output_estimate_error_pct": {"p50": pct(out_err, .5), "p10": pct(out_err, .1), "p90": pct(out_err, .9),
+                                      "min": pct(out_err, 0), "max": pct(out_err, 1)},
+        "learned_prompt_excess_tokens": calib,
+        "note": "error = (gateway count - model's reported count) / model's count; negative = gateway counts fewer",
+    }
+    print(json.dumps(drift, indent=2), flush=True)
+
+    # Quota race against the real model: every request may generate up to 200 tokens.
+    rkey = tenant_with_key("real-quota", quota)
+    print(f"quota race: {race_requests} requests at once against a {quota}-token quota (retrying while reserved)", flush=True)
+
+    def race(i):
+        # Like a real client: retry while the quota is only reserved, stop once it is exhausted.
+        body = {"model": model, "messages": REAL_PROMPTS[i % len(REAL_PROMPTS)], "max_tokens": 200, "stream": i % 3 == 0}
+        retries = 0
+        while True:
+            status, text, headers = gateway_post(rkey, body)
+            if status == 429 and "quota_reserved" in text and retries < 120:
+                retries += 1
+                time.sleep(0.5)
+                continue
+            return status, "insufficient_quota" in text, headers.get("X-Granted-Max-Tokens"), retries
+
+    with ThreadPoolExecutor(race_requests) as pool:
+        results = list(pool.map(race, range(race_requests)))
+    wait_lag_zero()
+    time.sleep(2)
+    billed = int(psql("select coalesce(sum(tokens),0) from tenant_month_usage where tenant_id = 'real-quota'") or 0)
+    race_out = {
+        "quota_tokens": quota, "requests": race_requests,
+        "served": sum(1 for s, _, _, _ in results if s == 200),
+        "refused_quota": sum(1 for s, q, _, _ in results if s == 429 and q),
+        "served_with_reduced_max_tokens": sum(1 for s, _, g, _ in results if s == 200 and g),
+        "retries_while_reserved": sum(r for _, _, _, r in results),
+        "billed_tokens": billed, "overshoot_tokens": billed - quota, "overshoot_pct": round(100.0 * (billed - quota) / quota, 2),
+    }
+    print(json.dumps(race_out, indent=2), flush=True)
+    record(f"real-model-{model}", {"model": model, "drift": drift, "quota_race": race_out})
+
+
 def gateway_state():
     """Whether the gateway container survived, and the last error lines it logged."""
     fmt = "{{.State.Status}} {{.State.OOMKilled}} {{.State.ExitCode}} {{.RestartCount}}"
@@ -519,6 +831,16 @@ def main():
         drain(int(os.environ.get("RATE", "2000")), int(os.environ.get("DURATION_S", "90")))
     elif what == "streams":
         streams([int(x) for x in os.environ.get("COUNTS", "2000,5000,10000").split(",")], int(os.environ.get("RAMP_S", "20")))
+    elif what == "quota-race":
+        quota_race([int(x) for x in os.environ.get("RATES", "500,2000,5000").split(",")],
+                   int(os.environ.get("QUOTA", "300000")), int(os.environ.get("DURATION_S", "10")),
+                   os.environ.get("VERSION", "current"))
+    elif what == "real-model":
+        real_model(os.environ.get("MODEL", "qwen2.5:0.5b"), int(os.environ.get("N", "200")),
+                   int(os.environ.get("CONCURRENCY", "4")), int(os.environ.get("QUOTA", "3000")))
+    elif what == "gateway-kill":
+        gateway_kill(int(os.environ.get("RATE", "1000")), int(os.environ.get("DURATION_S", "60")),
+                     version=os.environ.get("VERSION", "current"))
     elif what == "consumer-kill":
         chaos("consumer-kill", 30, ["docker", "kill", "-s", "KILL", "llmgw-metering-1"], 45, ["docker", "start", "llmgw-metering-1"])
     elif what == "broker-restart":

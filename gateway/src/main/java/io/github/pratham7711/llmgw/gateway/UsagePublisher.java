@@ -25,9 +25,16 @@ import tools.jackson.databind.json.JsonMapper;
  * broker restart held requests for seconds and filled the in-flight limit (see docs/DESIGN.md).
  * So the request thread only offers the event to a bounded queue, and one dispatcher thread
  * makes the send. A single dispatcher keeps each tenant's events in order, and it retries a send
- * that timed out waiting for metadata rather than dropping it. If the queue is full,
- * the event is counted as failed and logged in full to "usage.unpublished" for replay, the same
- * as a send that fails after delivery.timeout.ms.
+ * that timed out waiting for metadata rather than dropping it.
+ *
+ * Once Kafka acknowledges an event, its lease is released. An event that never gets there (the
+ * queue is full, a send fails after delivery.timeout.ms, or the process dies) is counted and
+ * logged to "usage.unpublished", and its lease, which holds the same event, outlives it: the
+ * reaper in metering publishes it when the lease expires.
+ *
+ * A request whose lease could not be settled (Redis failed at that moment) still holds its
+ * reservation, so its lease is not released on acknowledgement: the reaper moves the reservation
+ * into usage and republishes the event, which the sink drops as a duplicate of this one.
  */
 @Component
 public class UsagePublisher {
@@ -37,16 +44,20 @@ public class UsagePublisher {
   private static final long DRAIN_ON_SHUTDOWN_SECONDS = 10;
 
   private final KafkaTemplate<String, String> kafka;
+  private final LeaseReleaser leases;
   private final JsonMapper json;
-  private final BlockingQueue<UsageEvent> queue;
+  private record Pending(UsageEvent event, boolean releaseLease) {}
+
+  private final BlockingQueue<Pending> queue;
   private final Counter published;
   private final Counter failed;
   private final Thread dispatcher;
   private volatile boolean stopping;
 
-  public UsagePublisher(KafkaTemplate<String, String> kafka, JsonMapper json, MeterRegistry meters,
+  public UsagePublisher(KafkaTemplate<String, String> kafka, LeaseReleaser leases, JsonMapper json, MeterRegistry meters,
       @Value("${gateway.usage-queue-capacity:50000}") int capacity) {
     this.kafka = kafka;
+    this.leases = leases;
     this.json = json;
     this.queue = new ArrayBlockingQueue<>(capacity);
     this.published = Counter.builder("gateway.usage.events").tag("result", "published").register(meters);
@@ -57,19 +68,24 @@ public class UsagePublisher {
 
   /** Never blocks. */
   public void publish(UsageEvent event) {
-    if (!queue.offer(event)) fail(event, "dispatch queue full");
+    publish(event, true);
+  }
+
+  /** Never blocks. With {@code releaseLease} false the lease is left for the reaper. */
+  public void publish(UsageEvent event, boolean releaseLease) {
+    if (!queue.offer(new Pending(event, releaseLease))) fail(event, "dispatch queue full");
   }
 
   private void dispatch() {
     while (!stopping || !queue.isEmpty()) {
-      UsageEvent event;
+      Pending next;
       try {
-        event = queue.poll(200, TimeUnit.MILLISECONDS);
+        next = queue.poll(200, TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         return;
       }
-      if (event != null) send(event);
+      if (next != null) send(next.event(), next.releaseLease());
     }
   }
 
@@ -78,7 +94,7 @@ public class UsagePublisher {
    * is safe to retry, and the idempotent sink would absorb a duplicate anyway. A restarting broker
    * produced exactly this on the dispatcher; without the retry that event was dropped.
    */
-  private void send(UsageEvent event) {
+  private void send(UsageEvent event, boolean releaseLease) {
     String payload;
     try {
       payload = json.writeValueAsString(event);
@@ -90,8 +106,12 @@ public class UsagePublisher {
     while (true) {
       try {
         kafka.send(Topics.USAGE_EVENTS, event.tenantId(), payload).whenComplete((ok, err) -> {
-          if (err == null) published.increment();
-          else fail(event, err.toString());
+          if (err == null) {
+            published.increment();
+            if (releaseLease) leases.release(event.tenantId(), event.eventId().toString());
+          } else {
+            fail(event, err.toString());
+          }
         });
         return;
       } catch (RuntimeException e) {
@@ -140,7 +160,7 @@ public class UsagePublisher {
   void drain() throws InterruptedException {
     stopping = true;
     dispatcher.join(TimeUnit.SECONDS.toMillis(DRAIN_ON_SHUTDOWN_SECONDS));
-    for (UsageEvent left; (left = queue.poll()) != null; ) fail(left, "gateway shut down before dispatch");
+    for (Pending left; (left = queue.poll()) != null; ) fail(left.event(), "gateway shut down before dispatch");
     kafka.flush();
   }
 }

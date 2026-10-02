@@ -11,13 +11,18 @@ spec:
       containers:
         - name: redis
           image: redis:7.4-alpine
+          # Append-only log, fsynced every second: leases survive a Redis restart. emptyDir keeps it
+          # across container restarts only; a real deployment uses a replicated, persistent Redis.
+          args: ["--appendonly", "yes", "--appendfsync", "everysec"]
           ports: [{ containerPort: 6379 }]
+          volumeMounts: [{ name: data, mountPath: /data }]
           readinessProbe:
             exec: { command: ["redis-cli", "ping"] }
             periodSeconds: 3
           resources:
             requests: { cpu: 100m, memory: 64Mi }
             limits: { memory: 256Mi }
+      volumes: [{ name: data, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service

@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import tools.jackson.databind.json.JsonMapper;
@@ -24,19 +25,23 @@ public class ChatCompletionsController {
 
   private final MockProperties props;
   private final JsonMapper json;
+  private final RequestLog requests;
 
-  public ChatCompletionsController(MockProperties props, JsonMapper json) {
+  public ChatCompletionsController(MockProperties props, JsonMapper json, RequestLog requests) {
     this.props = props;
     this.json = json;
+    this.requests = requests;
   }
 
   /** Returns Object so Spring MVC picks the handler from the runtime type (stream or buffered reply). */
   @PostMapping(path = "/v1/chat/completions")
-  public Object complete(@RequestBody Map<String, Object> body, HttpServletResponse servletResponse) {
+  public Object complete(@RequestBody Map<String, Object> body, HttpServletResponse servletResponse,
+      @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
     ThreadLocalRandom rnd = ThreadLocalRandom.current();
     String model = String.valueOf(body.getOrDefault("model", "mock-small"));
     int promptTokens = estimatePromptTokens(body.get("messages"));
-    int maxTokens = body.get("max_tokens") instanceof Number n ? n.intValue() : 256;
+    int maxTokens = body.get("max_completion_tokens") instanceof Number c ? c.intValue()
+        : body.get("max_tokens") instanceof Number n ? n.intValue() : 256;
     int completionTokens = Math.max(1, Math.min(maxTokens, 16 + rnd.nextInt(241)));
     long latency = sampleLatencyMs(rnd);
 
@@ -46,6 +51,8 @@ public class ChatCompletionsController {
           .body(Map.of("error", Map.of("type", "upstream_overloaded", "message", "mock failure")));
     }
 
+    // A real provider bills a request once it starts generating, whether or not the reply arrives.
+    requests.served(requestId, promptTokens, completionTokens);
     String id = "chatcmpl-" + UUID.randomUUID();
     Map<String, Object> usage = usage(promptTokens, completionTokens);
     String text = "mock ".repeat(Math.min(completionTokens, 64)).trim();

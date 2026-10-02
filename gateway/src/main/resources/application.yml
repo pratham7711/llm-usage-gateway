@@ -14,7 +14,9 @@ spring:
       enabled: true
   mvc:
     async:
-      request-timeout: 150s
+      # Must outlast gateway.max-stream-duration, or a long stream is cut for the client while the
+      # gateway goes on draining (and billing) it.
+      request-timeout: ${ASYNC_REQUEST_TIMEOUT:11m}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/usage}
     username: ${DB_USER:usage}
@@ -46,7 +48,15 @@ gateway:
   upstream-base-url: ${UPSTREAM_BASE_URL:http://localhost:8090}
   upstream-api-key: ${UPSTREAM_API_KEY:}
   upstream-connect-timeout: 2s
-  upstream-request-timeout: 120s
+  upstream-request-timeout: ${UPSTREAM_REQUEST_TIMEOUT:120s}
+  max-stream-duration: ${MAX_STREAM_DURATION:10m}
+  # Must exceed the longest request by 30s (checked at startup); a crashed gateway's reservations
+  # are freed, and billed, this long after admission.
+  lease-ttl: ${LEASE_TTL:11m}
+  default-max-output-tokens: ${DEFAULT_MAX_OUTPUT_TOKENS:4096}
+  prompt-estimate-margin: 0.10
+  estimate-sample-rate: ${ESTIMATE_SAMPLE_RATE:0.01}
+  max-open-leases-per-tenant: ${MAX_OPEN_LEASES_PER_TENANT:100000}
   usage-topic-partitions: ${USAGE_TOPIC_PARTITIONS:6}
   usage-topic-replicas: ${USAGE_TOPIC_REPLICAS:1}
   # 0 = 128 per available CPU (see InFlightLimitFilter)

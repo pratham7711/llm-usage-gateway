@@ -9,13 +9,13 @@ streamed), and emits one usage event per forwarded request. A separate metering 
 those events into billing rows and quota state.
 
 ```
- client ──► gateway ──► upstream LLM (mock-upstream in tests and benchmarks)
-             │  ▲
-   Lua script│  │quota (read)
-             ▼  │
-            Redis ◄──────────── quota write-back ───┐
-             │                                      │
-             └─ UsageEvent ─► Kafka usage-events ─► metering ─► Postgres
+ client ──► gateway ──► upstream LLM (mock-upstream in benchmarks; also run against Ollama)
+             │  ▲            max_tokens = what the quota can still pay for
+ reserve,    │  │
+ settle,     ▼  │
+ release    Redis: rate limit, quota, leases ◄── quota write-back, lease reaper ──┐
+             │                                                                  │
+             └─ UsageEvent ─► Kafka usage-events ─► metering ─► Postgres ────────┘
                  (key = tenant)  6 partitions      batch tx     usage_event (PK event_id)
                                     │                            usage_rollup_minute
                                     └► usage-events.DLT          tenant_month_usage
@@ -26,9 +26,10 @@ those events into billing rows and quota state.
 1. **Auth.** `Authorization: Bearer <key>` is hashed with SHA-256 and looked up in `api_key`.
    Postgres holds digests only. Hits are cached for 60 s and misses for 10 s (Caffeine), so a
    client hammering a bad key costs at most one query per key per 10 s.
-2. **Admission, one Redis round trip.** `admission.lua` reads the tenant's billed tokens for
-   the month and refills its token bucket, atomically. It uses Redis's `TIME`, not the
-   gateway's clock, so every replica refills the same bucket identically. Both keys carry the
+2. **Admission, one Redis round trip.** The gateway counts the prompt's tokens locally, then
+   `admission.lua` checks the monthly quota, refills the token bucket and reserves the request's
+   worst-case cost in a lease, atomically (see "Leases" below). It uses Redis's `TIME`, not the
+   gateway's clock, so every replica refills the same bucket identically. Every key carries the
    `{tenant}` hash tag, so the script stays valid on Redis Cluster.
 3. **Forward.** `java.net.http.HttpClient` on virtual threads (Spring MVC with
    `spring.threads.virtual.enabled`). Blocking I/O per request is cheap, so the code stays
@@ -52,7 +53,11 @@ those events into billing rows and quota state.
      drain finishes and bills the full usage with status 499, and a slow client still applies
      backpressure upstream through the queue.
 5. **Usage event.** `UsageEvent{eventId, tenantId, model, tokensIn, tokensOut, latencyMs,
-   status, streamed, occurredAt}`, keyed by tenant. The request thread only offers it to a
+   status, streamed, occurredAt, usageSource, estTokensIn, estTokensOut}`, keyed by tenant. The
+   event id is the request's lease id, and the gateway sends it upstream as `X-Request-Id`, so a
+   provider's own logs reconcile against billing row by row. `usageSource` says where the counts
+   came from: `provider` (its usage report), `estimated` (the gateway's tokenizer, when the provider
+   reported nothing), `none` (an error response) or `lease_expired` (see "Leases"). The request thread only offers it to a
    bounded in-memory queue (50,000 events); one dispatcher thread serializes and sends. Rejected
    requests (401, 429) are never forwarded and never billed. Upstream failures are recorded
    with zero tokens so error rates appear in the rollups.
@@ -86,6 +91,150 @@ metering writes the new monthly total to Redis with a "set if greater" script, s
 replayed write can never roll a tenant's usage backwards. A failed Redis write does not fail
 the batch: a resync job copies the month's totals every 30 s.
 
+## Leases: a hard quota, and billing that survives a gateway crash
+
+The first version admitted a request by comparing the quota with the last total metering had
+committed. Requests in flight, and events still in Kafka, were invisible to it, so a tenant hit
+hard could spend well past its quota before the totals caught up. `bench.py quota-race` measures
+exactly that: one tenant with a 300,000-token monthly quota, hit for 10 s at each rate, every
+figure read from Postgres after the consumer lag reaches zero. The first version billed 303,192
+tokens at 500 req/s (1.06% past the quota), 314,401 at 2,000 (4.8%) and 342,982 at 5,000
+(14.33%). It also lost whatever usage was still in a gateway's memory when the gateway died.
+
+Each request now holds a **lease** in Redis from admission until Kafka has its usage event.
+
+1. **Reserve.** `admission.lua` counts what is used plus what admitted requests might still use,
+   so concurrent requests cannot jointly spend past the quota. It reserves the prompt (counted
+   locally, plus a margin, see "Counting tokens") and the output the request may generate. The
+   output is granted only as far as the quota can still pay for it, and the gateway sends the
+   grant upstream as `max_tokens` (or `max_completion_tokens` for reasoning models), so the
+   provider itself cannot generate past the quota. A lowered limit is reported in
+   `X-Granted-Max-Tokens`. The lease records the reservation and a template event.
+2. **Settle.** When the response is complete, `settle.lua` releases the reservation and adds the
+   real usage to the month's total in one step, so the quota never sees a request twice or not at
+   all. The lease now holds the exact usage event.
+3. **Release.** When Kafka acknowledges the event, `LeaseReleaser` deletes the lease. The
+   acknowledgement arrives on the producer's I/O thread, which must never wait on Redis, so the
+   deletes are queued and pipelined in batches of 1,000 on their own thread.
+4. **Reap.** Metering's `LeaseReaper` (every 10 s; 5 s in compose) claims leases past their ttl
+   with `reap.lua`, atomically, into a per-tenant list. A settled lease is published as it is. An
+   unsettled one belongs to a request whose gateway died mid-flight, so it is billed at its
+   reservation, the most the request could have cost (`status 0`, `usage_source =
+   lease_expired`), and its reservation becomes usage in the same script. A reaped record is
+   removed only after Kafka acknowledges it.
+
+Every step is safe to repeat. The reaper publishes under the lease id, which is the event id the
+gateway used, so when both get through the sink's primary key keeps one row. Claiming is atomic,
+and a reaped record is removed by value (`LREM`), so two metering replicas cannot remove each
+other's work. The lease ttl must exceed the longest request by 30 s, which is checked at startup:
+otherwise a slow request's lease would be reaped and billed at its reservation, and the real event
+dropped as a duplicate of it.
+
+**Measured, the same quota race:** 299,981 tokens billed at 500 req/s, 299,988 at 2,000 and
+299,988 at 5,000. That is 0 tokens past the quota, and more than 99.99% of it used. Both versions
+ran on battery power on the same machine the same morning.
+
+| Failure | What happens now |
+|---|---|
+| Gateway killed mid-request | The lease expires and the request is billed at its reservation, an upper bound, flagged `lease_expired`. Measured below. |
+| Gateway dies after settling, before Kafka acknowledges | The reaper publishes the exact event the lease holds. |
+| Gateway dies after Kafka acknowledged, before the release | The reaper republishes; the sink drops the duplicate. |
+| Kafka unreachable past the producer's 120 s | The event stays in its lease and the reaper republishes it later. A tenant with 100,000 open leases is refused with 503 `billing_backlog` rather than served unbillably. |
+| Settling fails (Redis blip) | The event is still published, but the lease is kept, and the reaper turns the reservation into usage. Redis then counts the reservation, not the real usage, for that request: conservative, and rare. |
+| Redis restarts | Redis keeps an append-only log fsynced every second, so leases survive. Up to a second of lease writes can be lost; those requests are still billed by the gateway that served them, unless it dies in the same second. |
+
+**Measured, `bench.py gateway-kill`:** 1,000 req/s for 60 s, with the gateway SIGKILLed at
+t=20 s and started again 5 s later (healthy at 31.5 s). The mock provider records the request id
+of every request it served, and the gateway sends its lease id as that request id, so every
+served request can be looked up in Postgres afterwards. The provider served 47,661 requests and
+Postgres holds 47,661 billing rows, one for each: none served and unbilled, none billed and never
+served. 47,620 rows carry the provider's own usage and match it exactly. The other 41 were in
+flight when the gateway died; their leases expired and were billed at their reservations, 5,270
+tokens more than those requests actually used (0.07% of the 7.19 million tokens served).
+Everything was billed by t=146 s, about two minutes after the kill, which is the lease ttl in
+compose. Run on battery power.
+
+The same run against the first version, with the provider counting requests instead of ids
+(that version sends none): the provider served 49,131 requests and 49,085 were billed. 46
+requests and 6,477 tokens were never billed. Four of them had already reached the client as
+complete 200 responses; their events were still in the gateway's memory when it died. The other
+42 were in flight. Back to back with the run above, on battery.
+
+The costs, stated plainly. A reservation is the worst case, so near the end of a quota a burst of
+concurrent requests is refused while earlier requests still hold their reservations, even if they
+end up using less. Those refusals are 429 `quota_reserved` with `Retry-After: 1`, distinct from
+429 `insufficient_quota`, because a retry usually fits once the earlier requests settle. And every
+request now does more work: the admission script writes a lease, a settle script and a pipelined
+release follow it, and the gateway counts the prompt and serializes the event twice.
+
+**What that costs, measured.** The 2-CPU gateway before leases (v1) and with them (v2), back to
+back on mains power in the order v2, v1, v2, each after a 30 s warm-up at 1,000 req/s
+(`capacity-2cpu-v1-ac`, `-v2-ac-a`, `-v2-ac-b` in `results/summary.json`):
+
+| | v1 | v2 (two runs) |
+|---|---|---|
+| Served at 6,000 req/s offered | 3,879 req/s | 3,394 and 3,122 req/s, 12 to 20% less |
+| Gateway CPU per request at 4,000 offered | 0.48 ms | 0.55 and 0.58 ms |
+| Redis CPU per request at 4,000 offered | 0.056 ms | 0.084 ms, 50% more |
+| Gateway memory at saturation (1 GiB container) | 863 MiB | 1,016 and 1,023 MiB |
+
+The machine was busier than for the 5,400 req/s run in the results table (load average 6 to 8, from
+other work on the laptop): v1 itself peaked at 3,879 req/s here. So the comparison is the result,
+not the absolute numbers. The memory is mostly heap the JVM commits under allocation pressure, up
+to its cap of 65% of the container; the live data is small, and the tokenizer's two vocabularies
+are about 50 MB of it (class histogram). It is still too close to the limit: give a lease gateway
+at least 1.25 GiB.
+
+Right after a restart the lease version sheds more while the JIT compiles its longer hot path. In
+the first 30 s at 1,000 req/s, run in the order v1, v2, v2, v1, v1 shed 1,349 and 1,411 requests
+and v2 shed 2,130 and 1,958; in the next 30 s both shed none, with admitted p99 at 92 ms. A JFR
+recording of a cold v2 showed the container throttled in 92% of its scheduler periods, the JIT
+compiler threads among the busiest. Slow-start at the load balancer covers this.
+
+## Counting tokens
+
+The gateway counts tokens itself with jtokkit, using OpenAI's vocabularies (`o200k_base`, or
+`cl100k_base` for gpt-4 and gpt-3.5), plus OpenAI's chat framing: 3 tokens per message and 3 to
+prime the reply. That count sizes the prompt reservation, and bills a response that arrives
+without a usage report: a stream cut at the gateway's maximum duration, an upstream that drops
+the connection, or a provider that never reports usage. Those rows are marked `estimated`. The
+provider's own report is used whenever there is one, and the gateway's count is kept next to it
+(`est_tokens_in` always, `est_tokens_out` on a 1% sample by default) so drift stays visible.
+
+For OpenAI models the count is the provider's own vocabulary. For anything else it is an
+approximation, and how far off is measured rather than assumed. `bench.py real-model` sends 200
+requests of ten prompt shapes (system messages, multi-turn, code, JSON; half streamed) to
+qwen2.5:0.5b on Ollama through the gateway, with every output counted:
+
+| Gateway's count vs the model's report | median | 10th percentile | 90th percentile | widest |
+|---|---|---|---|---|
+| Prompt tokens | 47.8% low | 53.7% low | 4.9% low | 73.3% low |
+| Output tokens | 1.6% low | 9.0% low | exact | 18.2% either way |
+
+All 200 responses carried the model's own usage report, so every row was billed from it; the
+gateway's count only decided the reservation.
+
+The output count was close (median 1.6% low). The prompt count was far off (median 47.8% low),
+and not because of the vocabulary: Ollama's template for this model adds a default system prompt
+when the request has none, so a one-word message the gateway counts as 8 tokens is billed by the
+model as 30. The first calibration learned a ratio (provider count over local count), which went
+to 3.09 and then reserved every prompt at three times its size. Nothing went past the quota, but in
+a race of 60 concurrent requests against a 3,000-token quota only 1,545 tokens were used. An extra
+fixed number of tokens is the right model for a chat template, so `PromptCalibration` now learns
+the excess in tokens per model: it jumps to any larger excess it sees, since reserving too little
+is what could spend past a quota, and decays by 1% per request when later requests need less.
+
+**Measured with the excess model**, same model and same race: it learned an excess of 20.4
+tokens, and the 60 requests used 2,982 of the 3,000 tokens, 0 past the quota. 22 were served (10
+of them with a lowered `max_tokens`) and 38 refused once the quota was spent; the 18 tokens left
+are fewer than any prompt here needs. Requests refused with `quota_reserved` retried after
+waiting, 709 times in total across the race, which is the burst cost described above.
+
+The quota guarantee does not rest on the estimate. Output cannot pass the grant, because the
+provider is told the limit. The prompt can be under-reserved only by the provider counting more
+than the learned excess on a request near the end of a quota, and only for the first requests to
+a model before it has been seen.
+
 ## Partitioning and ordering
 
 Events are keyed by `tenantId`, so one tenant's events land in one partition and are applied
@@ -111,8 +260,9 @@ partition's throughput. The usual fixes, in order of cost:
 | Upstream slow | Requests wait on virtual threads; the per-request timeout is 120 s | Tomcat `max-connections` 20,000 |
 | Upstream down | 502 or 504 to the client, event recorded with status and zero tokens | Connect timeout 2 s |
 | Kafka broker down | Events wait in the dispatch queue and the producer buffer; the producer retries | Queue of 50,000 events, then `buffer.memory` 32 MB and `delivery.timeout.ms` 120 s |
-| Dispatch queue full | The event is counted as failed and logged in full to `usage.unpublished`; the request is not slowed | About 25 s of traffic at 2000 requests/s |
-| Kafka down longer than 120 s | The send fails; the event is counted in `gateway_usage_events_total{result="failed"}` and logged in full to the `usage.unpublished` logger for replay | See "not done" below |
+| Dispatch queue full | The event is counted as failed and logged to `usage.unpublished`; its lease still holds it, and the reaper publishes it after the lease ttl | About 25 s of traffic at 2000 requests/s |
+| Kafka down longer than 120 s | The send fails and is counted in `gateway_usage_events_total{result="failed"}`; the lease keeps the event and the reaper republishes it once Kafka is back | 100,000 open leases per tenant, then 503 `billing_backlog` |
+| Gateway crash | Requests in flight are billed at their reservation when their leases expire; settled but unacknowledged events are republished from their leases | Lease ttl (11 min by default, 2 min in compose) plus one reap interval |
 | Metering down | Events accumulate in Kafka; quota checks see stale totals | Topic retention |
 | Postgres down | Metering retries the batch indefinitely; the gateway keeps serving cached tenants | Lag grows until it recovers |
 | Redis down | Admission fails within the 500 ms command timeout and the gateway returns 503 `admission_unavailable` with `Retry-After: 1` (fail closed) | 500 ms per request; Redis HA is out of scope |
@@ -318,16 +468,18 @@ none of them was run at that size:
 - **Postgres.** At 5,400 requests/s `usage_event` grows by about 93 GB a day. That table needs
   monthly partitions, and raw rows should age out to object storage once the rollups are final.
   The batch insert through `unnest()` keeps it at one statement per batch.
-- **Quota precision.** Admission reads the total from the last committed batch, so a tenant
-  can overshoot its quota by roughly (consumer lag x request size). Exact enforcement would
-  mean reserving estimated tokens in the admission script and settling after the call.
+- **Quota precision.** Exact, by reservation (see "Leases"). The price is work per request: the
+  per-request costs above were measured before leases. Back to back, leases added 14 to 20% to the
+  gateway's CPU per request and 50% to Redis's (see "What that costs, measured"). Scaled by those
+  factors (projected, not measured), the gateway needs roughly 24 to 36 cores for 50,000 req/s, and
+  Redis's single main thread tops out nearer 13,000 to 21,000 requests/s, so sharding Redis by
+  tenant comes sooner.
 
 ## Not done (on purpose, for scope)
 
-- **Transactional outbox.** A gateway crash loses events still in the dispatch queue or the
-  producer buffer (normally a few milliseconds of traffic; during a Kafka outage, up to the
-  queue's 50,000 events). An outbox table, or a local write-ahead file replayed
-  on start, would close that gap at the cost of a write per request.
+- **Persisted calibration.** Each gateway replica learns a model's prompt excess on its own and
+  forgets it on restart, so the first requests after a restart reserve without it. Keeping it in
+  Redis would share it across replicas.
 - **Multi-broker Kafka.** The compose and k8s setups run one broker. Production would run
   three with `replication.factor=3` and `min.insync.replicas=2`.
 - **Key management API.** Tenants and keys are seeded by migration for the local stack only.

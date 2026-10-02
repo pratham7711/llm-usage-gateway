@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: metering
+  task:
+    scheduling:
+      # Quota resync, price reload and the lease reaper each get a thread, so a slow Kafka
+      # acknowledgement in the reaper never delays the quota resync.
+      pool:
+        size: 3
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/usage}
     username: ${DB_USER:usage}
@@ -34,6 +40,8 @@ metering:
   usage-topic-partitions: ${USAGE_TOPIC_PARTITIONS:6}
   usage-topic-replicas: ${USAGE_TOPIC_REPLICAS:1}
   quota-resync-interval: 30s
+  lease-reap-interval: ${LEASE_REAP_INTERVAL:10s}
+  price-reload-interval: 60s
 
 management:
   endpoints:

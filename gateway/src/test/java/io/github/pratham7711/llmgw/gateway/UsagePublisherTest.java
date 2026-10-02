@@ -2,7 +2,11 @@ package io.github.pratham7711.llmgw.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pratham7711.llmgw.common.UsageEvent;
@@ -24,6 +28,7 @@ class UsagePublisherTest {
 
   private final JsonMapper json = JsonMapper.builder().build();
   private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+  private final LeaseReleaser leases = mock(LeaseReleaser.class);
 
   private static UsageEvent event(String tenant, int n) {
     return new UsageEvent(UUID.randomUUID(), tenant, "m-" + n, 1, 1, 1, 200, false, Instant.now());
@@ -46,7 +51,7 @@ class UsagePublisherTest {
       all.countDown();
       return CompletableFuture.completedFuture(null);
     });
-    UsagePublisher publisher = new UsagePublisher(kafka, json, meters, 100);
+    UsagePublisher publisher = new UsagePublisher(kafka, leases, json, meters, 100);
 
     long started = System.nanoTime();
     for (int i = 0; i < 3; i++) publisher.publish(event("t1", i));
@@ -56,6 +61,23 @@ class UsagePublisherTest {
     assertThat(all.await(10, TimeUnit.SECONDS)).isTrue();
     assertThat(sent).containsExactly("m-0", "m-1", "m-2");
     assertThat(failed()).isZero();
+    // Every acknowledged event gives its lease back.
+    verify(leases, timeout(5000).times(3)).release(eq("t1"), anyString());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void keepsTheLeaseOfARequestThatCouldNotBeSettled() throws Exception {
+    KafkaTemplate<String, String> kafka = mock(KafkaTemplate.class);
+    when(kafka.send(anyString(), anyString(), anyString())).thenReturn(CompletableFuture.completedFuture(null));
+    UsagePublisher publisher = new UsagePublisher(kafka, leases, json, meters, 100);
+    UsageEvent unsettled = event("t-unsettled", 0);
+    publisher.publish(unsettled, false);
+    publisher.publish(event("t-unsettled", 1));
+    // Only the settled one is released; the other's reservation is the reaper's to turn into usage.
+    verify(leases, timeout(5000).times(1)).release(eq("t-unsettled"), anyString());
+    Thread.sleep(300);
+    verify(leases, times(0)).release("t-unsettled", unsettled.eventId().toString());
   }
 
   @Test
@@ -73,7 +95,7 @@ class UsagePublisherTest {
       sent.countDown();
       return CompletableFuture.completedFuture(null);
     });
-    UsagePublisher publisher = new UsagePublisher(kafka, json, meters, 100);
+    UsagePublisher publisher = new UsagePublisher(kafka, leases, json, meters, 100);
 
     publisher.publish(event("t1", 0));
 
@@ -91,7 +113,7 @@ class UsagePublisherTest {
       release.await(10, TimeUnit.SECONDS);
       return CompletableFuture.completedFuture(null);
     });
-    UsagePublisher publisher = new UsagePublisher(kafka, json, meters, 1);
+    UsagePublisher publisher = new UsagePublisher(kafka, leases, json, meters, 1);
 
     long started = System.nanoTime();
     for (int i = 0; i < 6; i++) {
@@ -104,5 +126,9 @@ class UsagePublisherTest {
     // One event is held by the blocked dispatcher, one fits in the queue, the rest fail fast.
     assertThat(tookMs).isLessThan(1000);
     assertThat(failed()).isEqualTo(4);
+    // A failed event keeps its lease, so the reaper can still bill it.
+    verify(leases, timeout(5000).times(2)).release(eq("t1"), anyString());
+    Thread.sleep(300);
+    verify(leases, times(2)).release(eq("t1"), anyString());
   }
 }

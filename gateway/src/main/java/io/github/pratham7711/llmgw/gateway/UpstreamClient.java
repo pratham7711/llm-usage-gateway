@@ -12,6 +12,9 @@ import org.springframework.stereotype.Component;
 /**
  * Calls the upstream provider with the gateway's own credential. A tenant's key is never forwarded.
  * Blocking calls are cheap here because every request runs on a virtual thread.
+ *
+ * Each call carries the request's lease id as X-Request-Id, the same id its usage event is billed
+ * under, so a provider-side log can be reconciled against billing row by row.
  */
 @Component
 public class UpstreamClient {
@@ -30,18 +33,19 @@ public class UpstreamClient {
         .build();
   }
 
-  public HttpResponse<byte[]> send(byte[] body) throws IOException, InterruptedException {
-    return http.send(request(body), HttpResponse.BodyHandlers.ofByteArray());
+  public HttpResponse<byte[]> send(byte[] body, String requestId) throws IOException, InterruptedException {
+    return http.send(request(body, requestId), HttpResponse.BodyHandlers.ofByteArray());
   }
 
-  public HttpResponse<InputStream> stream(byte[] body) throws IOException, InterruptedException {
-    return http.send(request(body), HttpResponse.BodyHandlers.ofInputStream());
+  public HttpResponse<InputStream> stream(byte[] body, String requestId) throws IOException, InterruptedException {
+    return http.send(request(body, requestId), HttpResponse.BodyHandlers.ofInputStream());
   }
 
-  private HttpRequest request(byte[] body) {
+  private HttpRequest request(byte[] body, String requestId) {
     HttpRequest.Builder b = HttpRequest.newBuilder(completions)
         .timeout(props.upstreamRequestTimeout())
         .header("Content-Type", "application/json")
+        .header("X-Request-Id", requestId)
         .POST(HttpRequest.BodyPublishers.ofByteArray(body));
     if (props.upstreamApiKey() != null && !props.upstreamApiKey().isBlank()) {
       b.header("Authorization", "Bearer " + props.upstreamApiKey());
